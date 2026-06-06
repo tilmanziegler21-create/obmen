@@ -55,8 +55,8 @@ export default function Checkout() {
       : (WebApp.initDataUnsafe?.user?.first_name || 'Неизвестный');
 
     if (BOT_TOKEN && CHAT_ID) {
-      try {
-        const message = `
+        try {
+          const message = `
 🚨 *Новая заявка на обмен!*
 
 🔄 *Направление:* ${orderData.direction === 'CASH_TO_USDT' ? 'Наличные EUR ➔ USDT' : 'USDT ➔ Наличные EUR'}
@@ -70,28 +70,28 @@ ${isGettingUSDT
   : `📱 *Контакт клиента:* ${orderData.contact}`}
 
 👤 *Telegram клиента:* ${userHandle}
-        `;
+          `;
 
-        fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: CHAT_ID,
-            text: message,
-            parse_mode: 'Markdown',
-          }),
-        }).catch(e => console.error('Telegram API Error:', e));
-      } catch (e) {
-        console.error('Ошибка при формировании уведомления', e);
+          const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: CHAT_ID,
+              text: message,
+              parse_mode: 'Markdown',
+            }),
+          });
+          
+          if (!response.ok) {
+            const errorData = await response.json();
+            console.error('Telegram API Error Response:', errorData);
+          }
+        } catch (e) {
+          console.error('Ошибка при отправке в Telegram:', e);
+        }
+      } else {
+        console.warn('Telegram BOT_TOKEN or CHAT_ID is not set in environment variables');
       }
-    } else {
-      // Fallback: if no tokens, just use sendData
-      try {
-        WebApp.sendData(JSON.stringify(orderData));
-      } catch (e) {
-        console.error('Ошибка при отправке данных в бота', e);
-      }
-    }
     
     setTimeout(() => {
       WebApp.HapticFeedback.notificationOccurred('success');
