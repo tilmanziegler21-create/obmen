@@ -48,12 +48,49 @@ export default function Checkout() {
       contact: !isGettingUSDT ? contact : null,
     };
 
-    try {
-      // Нативный и безопасный способ передачи данных обратно в Telegram бота.
-      // Бот получит событие `web_app_data` с этой JSON-строкой и сможет переслать её админу.
-      WebApp.sendData(JSON.stringify(orderData));
-    } catch (e) {
-      console.error('Ошибка при отправке данных в бота', e);
+    const BOT_TOKEN = import.meta.env.VITE_BOT_TOKEN;
+    const CHAT_ID = import.meta.env.VITE_CHAT_ID;
+    const userHandle = WebApp.initDataUnsafe?.user?.username 
+      ? `@${WebApp.initDataUnsafe.user.username}` 
+      : (WebApp.initDataUnsafe?.user?.first_name || 'Неизвестный');
+
+    if (BOT_TOKEN && CHAT_ID) {
+      try {
+        const message = `
+🚨 *Новая заявка на обмен!*
+
+🔄 *Направление:* ${orderData.direction === 'CASH_TO_USDT' ? 'Наличные EUR ➔ USDT' : 'USDT ➔ Наличные EUR'}
+🏙 *Город:* ${orderData.city}
+💰 *Отдают:* ${orderData.giveAmount} ${orderData.giveCurrency}
+💸 *Получают:* ${orderData.getAmount} ${orderData.getCurrency}
+📊 *Курс:* 1 EUR = ${orderData.rate} USDT
+
+${isGettingUSDT 
+  ? `🔗 *Сеть:* ${orderData.network}\n💼 *Кошелек:* \`${orderData.wallet}\`` 
+  : `📱 *Контакт клиента:* ${orderData.contact}`}
+
+👤 *Telegram клиента:* ${userHandle}
+        `;
+
+        fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: CHAT_ID,
+            text: message,
+            parse_mode: 'Markdown',
+          }),
+        }).catch(e => console.error('Telegram API Error:', e));
+      } catch (e) {
+        console.error('Ошибка при формировании уведомления', e);
+      }
+    } else {
+      // Fallback: if no tokens, just use sendData
+      try {
+        WebApp.sendData(JSON.stringify(orderData));
+      } catch (e) {
+        console.error('Ошибка при отправке данных в бота', e);
+      }
     }
     
     setTimeout(() => {

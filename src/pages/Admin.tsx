@@ -8,6 +8,19 @@ export default function Admin() {
   const navigate = useNavigate();
   const { cities, updateCityLimit, toggleCityActive } = useStore();
   
+  const user = WebApp.initDataUnsafe?.user;
+  const adminIds = (import.meta.env.VITE_ADMIN_IDS || '').split(',').map(id => id.trim());
+  const isAdmin = user?.id ? adminIds.includes(user.id.toString()) : false;
+
+  // Protect route
+  if (!isAdmin && process.env.NODE_ENV === 'production') {
+    return (
+      <div className="flex-1 flex items-center justify-center p-6 text-center">
+        <h1 className="text-xl text-error font-bold">Доступ запрещен</h1>
+      </div>
+    );
+  }
+
   const [editLimits, setEditLimits] = useState<Record<string, string>>(
     cities.reduce((acc, city) => ({ ...acc, [city.id]: city.limitEUR.toString() }), {})
   );

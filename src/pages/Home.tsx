@@ -13,6 +13,10 @@ export default function Home() {
   } = useStore();
 
   const user = WebApp.initDataUnsafe?.user;
+  
+  // Get admin IDs from environment variables (comma separated string)
+  const adminIds = (import.meta.env.VITE_ADMIN_IDS || '').split(',').map(id => id.trim());
+  const isAdmin = user?.id ? adminIds.includes(user.id.toString()) : false;
 
   const getCityFlag = (name: string) => {
     if (name.includes('Берлин')) return '🇩🇪';
@@ -65,8 +69,10 @@ export default function Home() {
       {/* Header */}
       <header className="relative z-10 p-[20px_20px_16px] flex items-center justify-between border-b border-border">
         <div 
-          className="flex items-center gap-[10px] cursor-pointer"
-          onClick={() => navigate('/admin')}
+          className={`flex items-center gap-[10px] ${isAdmin ? 'cursor-pointer' : ''}`}
+          onClick={() => {
+            if (isAdmin) navigate('/admin');
+          }}
         >
           <div className="w-[36px] h-[36px] rounded-[10px] bg-gradient-to-br from-[#00D084] to-[#00A86B] flex items-center justify-center shrink-0">
             {/* Bull Icon Logo */}
