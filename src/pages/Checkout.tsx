@@ -63,19 +63,19 @@ export default function Checkout() {
     if (BOT_TOKEN && CHAT_ID) {
       try {
         const message = `
-🚨 *Новая заявка на обмен!*
+🚨 <b>Новая заявка на обмен!</b>
 
-🔄 *Направление:* ${orderData.direction === 'CASH_TO_USDT' ? 'Наличные EUR ➔ USDT' : 'USDT ➔ Наличные EUR'}
-🏙 *Город:* ${orderData.city}
-💰 *Отдают:* ${orderData.giveAmount} ${orderData.giveCurrency}
-💸 *Получают:* ${orderData.getAmount} ${orderData.getCurrency}
-📊 *Курс:* 1 EUR = ${orderData.rate} USDT
+🔄 <b>Направление:</b> ${orderData.direction === 'CASH_TO_USDT' ? 'Наличные EUR ➔ USDT' : 'USDT ➔ Наличные EUR'}
+🏙 <b>Город:</b> ${orderData.city}
+💰 <b>Отдают:</b> ${orderData.giveAmount} ${orderData.giveCurrency}
+💸 <b>Получают:</b> ${orderData.getAmount} ${orderData.getCurrency}
+📊 <b>Курс:</b> 1 EUR = ${orderData.rate} USDT
 
 ${isGettingUSDT 
-  ? `🔗 *Сеть:* ${orderData.network}\n💼 *Кошелек:* \`${orderData.wallet}\`` 
-  : `📱 *Контакт клиента:* ${orderData.contact}`}
+  ? `🔗 <b>Сеть:</b> ${orderData.network}\n💼 <b>Кошелек:</b> <code>${orderData.wallet}</code>` 
+  : `📱 <b>Контакт клиента:</b> ${orderData.contact}`}
 
-👤 *Telegram клиента:* ${userHandle}
+👤 <b>Telegram клиента:</b> ${userHandle}
         `;
 
         const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
@@ -84,7 +84,7 @@ ${isGettingUSDT
           body: JSON.stringify({
             chat_id: CHAT_ID,
             text: message,
-            parse_mode: 'Markdown',
+            parse_mode: 'HTML',
           }),
         });
         
