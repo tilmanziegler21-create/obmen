@@ -22,6 +22,8 @@ export default function Checkout() {
   const [wallet, setWallet] = useState('');
   const [network, setNetwork] = useState(NETWORKS[0].id);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const city = cities.find(c => c.id === selectedCityId);
 
@@ -32,6 +34,8 @@ export default function Checkout() {
 
   const handleSubmit = async () => {
     WebApp.HapticFeedback.impactOccurred('heavy');
+    setIsSubmitting(true);
+    setSubmitError(null);
     
     // Формируем данные заявки
     const orderData = {
@@ -54,9 +58,11 @@ export default function Checkout() {
       ? `@${WebApp.initDataUnsafe.user.username}` 
       : (WebApp.initDataUnsafe?.user?.first_name || 'Неизвестный');
 
+    let isSentSuccessfully = false;
+
     if (BOT_TOKEN && CHAT_ID) {
-        try {
-          const message = `
+      try {
+        const message = `
 🚨 *Новая заявка на обмен!*
 
 🔄 *Направление:* ${orderData.direction === 'CASH_TO_USDT' ? 'Наличные EUR ➔ USDT' : 'USDT ➔ Наличные EUR'}
@@ -70,38 +76,52 @@ ${isGettingUSDT
   : `📱 *Контакт клиента:* ${orderData.contact}`}
 
 👤 *Telegram клиента:* ${userHandle}
-          `;
+        `;
 
-          const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chat_id: CHAT_ID,
-              text: message,
-              parse_mode: 'Markdown',
-            }),
-          });
-          
-          if (!response.ok) {
-            const errorData = await response.json();
-            console.error('Telegram API Error Response:', errorData);
-          }
-        } catch (e) {
-          console.error('Ошибка при отправке в Telegram:', e);
+        const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: CHAT_ID,
+            text: message,
+            parse_mode: 'Markdown',
+          }),
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('Telegram API Error Response:', errorData);
+          setSubmitError(`Ошибка Telegram API: ${errorData.description}`);
+          setIsSubmitting(false);
+          return;
         }
-      } else {
-        console.warn('Telegram BOT_TOKEN or CHAT_ID is not set in environment variables');
+        
+        isSentSuccessfully = true;
+      } catch (e) {
+        console.error('Ошибка при отправке в Telegram:', e);
+        setSubmitError(`Ошибка сети при отправке в Telegram: ${e instanceof Error ? e.message : 'Неизвестная ошибка'}`);
+        setIsSubmitting(false);
+        return;
       }
+    } else {
+      console.warn('Telegram BOT_TOKEN or CHAT_ID is not set in environment variables');
+      setSubmitError('Ошибка: не настроены ключи бота (BOT_TOKEN или CHAT_ID)');
+      setIsSubmitting(false);
+      return;
+    }
     
-    setTimeout(() => {
-      WebApp.HapticFeedback.notificationOccurred('success');
-      setIsSuccess(true);
-      
-      // Close WebApp after 2 seconds
+    if (isSentSuccessfully) {
       setTimeout(() => {
-        WebApp.close();
-      }, 2000);
-    }, 300);
+        WebApp.HapticFeedback.notificationOccurred('success');
+        setIsSuccess(true);
+        setIsSubmitting(false);
+        
+        // Close WebApp after 2 seconds
+        setTimeout(() => {
+          WebApp.close();
+        }, 2000);
+      }, 300);
+    }
   };
 
   const isGettingUSDT = direction === 'GIVE_CASH';
@@ -230,9 +250,14 @@ ${isGettingUSDT
       </div>
 
       <div className="pb-[32px] pt-[16px] mt-auto">
+        {submitError && (
+          <div className="mb-[16px] p-[12px] bg-[rgba(248,113,113,0.1)] border border-[rgba(248,113,113,0.2)] rounded-r text-[12px] text-error text-center">
+            {submitError}
+          </div>
+        )}
         <button
           onClick={handleSubmit}
-          disabled={!isValid}
+          disabled={!isValid || isSubmitting}
           className={`w-full p-[18px] border-none rounded-r2 font-sans text-[15px] font-[700] cursor-pointer transition-all tracking-[0.02em] flex items-center justify-center gap-[8px] relative overflow-hidden active:scale-[0.985] disabled:opacity-35 disabled:cursor-not-allowed disabled:transform-none
             ${isValid 
               ? (direction === 'GIVE_CASH' 
@@ -241,7 +266,11 @@ ${isGettingUSDT
               : 'bg-bg3 text-muted'
             }`}
         >
-          {direction === 'GIVE_CASH' ? 'ПОЛУЧИТЬ USDT' : 'ПОЛУЧИТЬ НАЛИЧНЫЕ'}
+          {isSubmitting ? (
+            <span className="animate-pulse">ОТПРАВКА...</span>
+          ) : (
+            direction === 'GIVE_CASH' ? 'ПОЛУЧИТЬ USDT' : 'ПОЛУЧИТЬ НАЛИЧНЫЕ'
+          )}
         </button>
       </div>
     </motion.div>
