@@ -33,60 +33,38 @@ export default function Checkout() {
   const handleSubmit = async () => {
     WebApp.HapticFeedback.impactOccurred('heavy');
     
-    // Telegram Bot HTTP API Direct Integration
+    // Формируем данные заявки
+    const orderData = {
+      action: 'new_order',
+      direction: direction === 'GIVE_CASH' ? 'CASH_TO_USDT' : 'USDT_TO_CASH',
+      city: city?.name,
+      giveAmount,
+      giveCurrency: direction === 'GIVE_CASH' ? 'EUR' : 'USDT',
+      getAmount,
+      getCurrency: direction === 'GIVE_CASH' ? 'USDT' : 'EUR',
+      rate: effectiveRate.toFixed(4),
+      network: isGettingUSDT ? network : null,
+      wallet: isGettingUSDT ? wallet : null,
+      contact: !isGettingUSDT ? contact : null,
+    };
+
     try {
-      // Ensure these variables are set in your .env or hosting provider (Render)
-      const BOT_TOKEN = import.meta.env.VITE_BOT_TOKEN;
-      const CHAT_ID = import.meta.env.VITE_CHAT_ID;
-      
-      const orderType = direction === 'GIVE_CASH' ? 'Наличные EUR ➔ USDT' : 'USDT ➔ Наличные EUR';
-      const userHandle = WebApp.initDataUnsafe?.user?.username 
-        ? `@${WebApp.initDataUnsafe.user.username}` 
-        : (WebApp.initDataUnsafe?.user?.first_name || 'Неизвестный');
-      
-      const message = `
-🚨 *Новая заявка на обмен!*
-
-🔄 *Направление:* ${orderType}
-🏙 *Город:* ${city?.name}
-💰 *Отдают:* ${giveAmount} ${direction === 'GIVE_CASH' ? 'EUR' : 'USDT'}
-💸 *Получают:* ${getAmount} ${direction === 'GIVE_CASH' ? 'USDT' : 'EUR'}
-📊 *Курс:* 1 EUR = ${effectiveRate.toFixed(4)} USDT
-
-${isGettingUSDT 
-  ? `🔗 *Сеть:* ${network}\n💼 *Кошелек:* \`${wallet}\`` 
-  : `📱 *Контакт клиента:* ${contact}`}
-
-👤 *Telegram клиента:* ${userHandle}
-      `;
-
-      // Uncomment to actually send when token is provided
-      if (BOT_TOKEN && CHAT_ID) {
-        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: CHAT_ID,
-            text: message,
-            parse_mode: 'Markdown',
-          }),
-        });
-      } else {
-        console.warn('Telegram Bot Token or Chat ID is missing. Message not sent.');
-      }
-    } catch (error) {
-      console.error('Error sending notification to Telegram', error);
+      // Нативный и безопасный способ передачи данных обратно в Telegram бота.
+      // Бот получит событие `web_app_data` с этой JSON-строкой и сможет переслать её админу.
+      WebApp.sendData(JSON.stringify(orderData));
+    } catch (e) {
+      console.error('Ошибка при отправке данных в бота', e);
     }
     
     setTimeout(() => {
       WebApp.HapticFeedback.notificationOccurred('success');
       setIsSuccess(true);
       
-      // Close WebApp after 3 seconds
+      // Close WebApp after 2 seconds
       setTimeout(() => {
         WebApp.close();
-      }, 3000);
-    }, 500);
+      }, 2000);
+    }, 300);
   };
 
   const isGettingUSDT = direction === 'GIVE_CASH';
