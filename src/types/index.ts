@@ -30,6 +30,7 @@ export interface ExchangeOrder {
   contact: string | null;
   userHandle: string;
   managerName: string | null;
+  antiPhishingCode: string | null;
   status: OrderStatus;
 }
 
@@ -46,6 +47,7 @@ export interface ExchangeState {
   rateUpdatedAt: string;
   orders: ExchangeOrder[];
   usdtReserve: number;
+  antiPhishingCode: string;
   checkoutPrefill: CheckoutPrefill;
   isLoading: boolean;
   
@@ -61,6 +63,7 @@ export interface ExchangeState {
   updateCityLimit: (id: string, limit: number) => void;
   updateUsdtReserve: (amount: number) => void;
   updateRate: (rate: number) => void;
+  updateAntiPhishingCode: (code: string) => void;
   toggleCityActive: (id: string) => void;
   setCity: (id: string) => void;
   setDirection: (dir: ExchangeDirection) => void;

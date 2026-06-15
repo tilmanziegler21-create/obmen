@@ -38,6 +38,7 @@ const DEFAULT_CHECKOUT_PREFILL = {
   wallet: '',
   network: 'TRC-20',
 } as const;
+const DEFAULT_ANTI_PHISHING_CODE = 'BULL';
 
 export const useStore = create<ExchangeState>()(
   persist(
@@ -47,6 +48,7 @@ export const useStore = create<ExchangeState>()(
       rateUpdatedAt: new Date().toISOString(),
       orders: [],
       usdtReserve: 2500,
+      antiPhishingCode: DEFAULT_ANTI_PHISHING_CODE,
       checkoutPrefill: DEFAULT_CHECKOUT_PREFILL,
       isLoading: false,
       
@@ -68,6 +70,9 @@ export const useStore = create<ExchangeState>()(
         rates: { EUR_USDT: rate },
         rateUpdatedAt: new Date().toISOString(),
       }),
+
+      updateAntiPhishingCode: (code) =>
+        set({ antiPhishingCode: code.trim() || DEFAULT_ANTI_PHISHING_CODE }),
       
       toggleCityActive: (id) => set((state) => ({
         cities: state.cities.map(city => 
@@ -249,7 +254,7 @@ export const useStore = create<ExchangeState>()(
     }),
     {
       name: 'cryptobull-storage',
-      version: 5,
+      version: 6,
       // Persist core admin and order data, reset user inputs on reload
       partialize: (state) => ({
         cities: state.cities,
@@ -257,6 +262,7 @@ export const useStore = create<ExchangeState>()(
         rateUpdatedAt: state.rateUpdatedAt,
         orders: state.orders,
         usdtReserve: state.usdtReserve,
+        antiPhishingCode: state.antiPhishingCode,
       }),
       migrate: (persistedState) => {
         const state = persistedState as ExchangeState & {
@@ -264,6 +270,7 @@ export const useStore = create<ExchangeState>()(
           orders?: ExchangeOrder[];
           usdtReserve?: number;
           rateUpdatedAt?: string;
+          antiPhishingCode?: string;
         };
 
         if (!state?.cities) {
@@ -275,9 +282,11 @@ export const useStore = create<ExchangeState>()(
           orders: (state.orders ?? []).map((order) => ({
             ...order,
             managerName: order.managerName ?? null,
+            antiPhishingCode: order.antiPhishingCode ?? state.antiPhishingCode ?? DEFAULT_ANTI_PHISHING_CODE,
           })),
           usdtReserve: state.usdtReserve ?? 2500,
           rateUpdatedAt: state.rateUpdatedAt ?? new Date().toISOString(),
+          antiPhishingCode: state.antiPhishingCode ?? DEFAULT_ANTI_PHISHING_CODE,
           cities: state.cities.map((city) => {
             const legacyCity = city as City & { name?: string };
 

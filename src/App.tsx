@@ -25,7 +25,7 @@ function App() {
 
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-bg text-text flex flex-col max-w-[420px] mx-auto relative overflow-hidden">
+      <div className="min-h-screen w-full bg-bg text-text flex flex-col max-w-[420px] mx-auto relative overflow-hidden">
         {/* Background Orbs */}
         <div className="fixed rounded-full blur-[80px] pointer-events-none z-0 w-[260px] h-[260px] bg-[rgba(0,208,132,0.07)] -top-[80px] -right-[60px]"></div>
         <div className="fixed rounded-full blur-[80px] pointer-events-none z-0 w-[200px] h-[200px] bg-[rgba(79,142,247,0.05)] bottom-[120px] -left-[60px]"></div>
@@ -35,7 +35,10 @@ function App() {
           backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E")`
         }}></div>
 
-        <div className="relative z-10 flex-1 flex flex-col pb-20">
+        <div
+          className="relative z-10 flex-1 flex flex-col"
+          style={{ paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}
+        >
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/checkout" element={<Checkout />} />

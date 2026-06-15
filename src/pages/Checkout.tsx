@@ -12,7 +12,7 @@ export default function Checkout() {
   const { t } = useI18n();
   const defaultContact = WebApp.initDataUnsafe?.user?.username ? `@${WebApp.initDataUnsafe.user.username}` : '';
   const { 
-    cities, selectedCityId, direction, rates, usdtReserve, checkoutPrefill,
+    cities, selectedCityId, direction, rates, usdtReserve, antiPhishingCode, checkoutPrefill,
     giveAmount, getAmount, createOrder, clearCheckoutPrefill
   } = useStore();
   const NETWORKS = [
@@ -95,6 +95,8 @@ ${isGettingUSDT
   ? `🔗 <b>${t('telegram.network')}</b> ${orderData.network}\n💼 <b>${t('telegram.wallet')}</b> <code>${orderData.wallet}</code>` 
   : `📱 <b>${t('telegram.contact')}</b> ${orderData.contact}`}
 
+🛡 <b>${t('telegram.securityCode')}</b> <code>${antiPhishingCode}</code>
+
 👤 <b>${t('telegram.client')}</b> ${userHandle}
         `;
 
@@ -149,6 +151,7 @@ ${isGettingUSDT
         contact: !isGettingUSDT ? contact : null,
         userHandle,
         managerName: null,
+        antiPhishingCode,
       });
 
       setTimeout(() => {
@@ -208,7 +211,10 @@ ${isGettingUSDT
       exit={{ opacity: 0, x: -20 }}
       className="flex-1 flex flex-col px-[16px] pt-[20px]"
     >
-      <div className="flex items-center justify-between gap-[12px] mb-[16px]">
+      <div
+        className="mb-[16px] flex items-center justify-between gap-[12px]"
+        style={{ paddingTop: 'max(4px, env(safe-area-inset-top))' }}
+      >
         <div className="flex items-center gap-[12px]">
           <button onClick={handleBack} className="w-[36px] h-[36px] rounded-full bg-bg3 border border-border2 flex items-center justify-center text-muted hover:text-text transition-colors">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -230,28 +236,38 @@ ${isGettingUSDT
           </div>
         )}
 
+        <div className="rounded-r border border-green3 bg-green2 px-[16px] py-[12px]">
+          <div className="text-[11px] font-[700] uppercase tracking-[0.08em] text-green">{t('checkout.securityCodeTitle')}</div>
+          <div className="mt-[6px] flex flex-col gap-[6px] min-[360px]:flex-row min-[360px]:items-center min-[360px]:justify-between">
+            <div className="text-[12px] font-[500] leading-relaxed text-text">{t('checkout.securityCodeHint')}</div>
+            <div className="self-start rounded-[8px] border border-green3 bg-[rgba(10,11,15,0.35)] px-[10px] py-[6px] font-mono text-[13px] font-[700] tracking-[0.12em] text-green">
+              {antiPhishingCode}
+            </div>
+          </div>
+        </div>
+
         {/* Order Summary Card */}
         <div className="bg-bg2 border-[1.5px] border-border2 rounded-r2 p-[20px] space-y-[16px]">
           <h2 className="text-[14px] font-[700] text-text mb-[16px]">{t('checkout.detailsTitle')}</h2>
           
-          <div className="flex justify-between items-center text-[13px]">
+          <div className="flex items-center justify-between gap-[12px] text-[13px]">
             <span className="text-muted font-[500]">{t('checkout.city')}</span>
-            <span className="font-[700] text-text">{cityName}</span>
+            <span className="text-right font-[700] text-text">{cityName}</span>
           </div>
           
-          <div className="flex justify-between items-center text-[13px]">
+          <div className="flex items-center justify-between gap-[12px] text-[13px]">
             <span className="text-muted font-[500]">{t('checkout.youGive')}</span>
-            <span className={`font-mono font-[600] text-[15px] ${direction === 'GIVE_CASH' ? 'text-amber' : 'text-usdt'}`}>{giveAmount} {direction === 'GIVE_CASH' ? 'EUR' : 'USDT'}</span>
+            <span className={`text-right font-mono font-[600] text-[15px] ${direction === 'GIVE_CASH' ? 'text-amber' : 'text-usdt'}`}>{giveAmount} {direction === 'GIVE_CASH' ? 'EUR' : 'USDT'}</span>
           </div>
           
-          <div className="flex justify-between items-center text-[13px]">
+          <div className="flex items-center justify-between gap-[12px] text-[13px]">
             <span className="text-muted font-[500]">{t('checkout.youGet')}</span>
-            <span className={`font-mono font-[600] text-[15px] ${direction === 'GIVE_CASH' ? 'text-usdt' : 'text-amber'}`}>{getAmount} {direction === 'GIVE_CASH' ? 'USDT' : 'EUR'}</span>
+            <span className={`text-right font-mono font-[600] text-[15px] ${direction === 'GIVE_CASH' ? 'text-usdt' : 'text-amber'}`}>{getAmount} {direction === 'GIVE_CASH' ? 'USDT' : 'EUR'}</span>
           </div>
 
-          <div className="flex justify-between items-center pt-[16px] border-t border-border text-[12px]">
+          <div className="flex items-center justify-between gap-[12px] border-t border-border pt-[16px] text-[12px]">
             <span className="text-muted font-[500]">{t('checkout.fixedRate')}</span>
-            <span className="font-mono font-[600] text-text">1 EUR = {effectiveRate.toFixed(4)} USDT</span>
+            <span className="text-right font-mono font-[600] text-text">1 EUR = {effectiveRate.toFixed(4)} USDT</span>
           </div>
         </div>
 
@@ -260,7 +276,7 @@ ${isGettingUSDT
           <div className="space-y-[16px]">
             <div className="space-y-[8px]">
               <label className="text-[11px] text-muted font-[600] uppercase tracking-[0.06em] ml-[4px]">{t('checkout.networkLabel')}</label>
-              <div className="flex gap-[8px]">
+              <div className="grid grid-cols-1 gap-[8px] min-[360px]:grid-cols-3">
                 {NETWORKS.map((net) => (
                   <button
                     key={net.id}

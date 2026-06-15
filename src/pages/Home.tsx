@@ -26,7 +26,7 @@ export default function Home() {
   const navigate = useNavigate();
   const { t, language } = useI18n();
   const { 
-    cities, selectedCityId, direction, rates, rateUpdatedAt, orders, usdtReserve,
+    cities, selectedCityId, direction, rates, rateUpdatedAt, orders, usdtReserve, antiPhishingCode,
     setCity, setDirection, giveAmount, getAmount, setGiveAmount, applyOrderTemplate, clearCheckoutPrefill
   } = useStore();
 
@@ -35,7 +35,7 @@ export default function Home() {
   const currentUserHandle = user?.username ? `@${user.username}` : (user?.first_name || t('checkout.unknownUser'));
   
   // Get admin IDs from environment variables (comma separated string)
-  const adminIds = (import.meta.env.VITE_ADMIN_IDS || '').split(',').map(id => id.trim());
+  const adminIds = (import.meta.env.VITE_ADMIN_IDS || '').split(',').map((id: string) => id.trim());
   const isAdmin = user?.id ? adminIds.includes(user.id.toString()) : false;
 
   const filteredCities = useMemo(() => {
@@ -139,9 +139,12 @@ export default function Home() {
       className="flex-1 flex flex-col"
     >
       {/* Header */}
-      <header className="relative z-10 p-[20px_20px_16px] flex items-center justify-between border-b border-border">
+      <header
+        className="relative z-10 flex items-start justify-between gap-[12px] border-b border-border px-[16px] pb-[16px] pt-[16px]"
+        style={{ paddingTop: 'max(16px, env(safe-area-inset-top))' }}
+      >
         <div 
-          className={`flex items-center gap-[10px] ${isAdmin ? 'cursor-pointer' : ''}`}
+          className={`min-w-0 flex flex-1 items-center gap-[10px] ${isAdmin ? 'cursor-pointer' : ''}`}
           onClick={() => {
             if (isAdmin) navigate('/admin');
           }}
@@ -155,16 +158,16 @@ export default function Home() {
               <path d="M9 13H15" stroke="#0A0B0F" strokeWidth="1.5" strokeLinecap="round"/>
             </svg>
           </div>
-          <div>
-            <div className="text-[17px] font-[800] tracking-[0.06em] text-text ">CryptoBull</div>
+          <div className="min-w-0">
+            <div className="truncate text-[15px] font-[800] tracking-[0.04em] text-text min-[360px]:text-[17px]">CryptoBull</div>
             <div className="text-[10px] font-[500] text-muted tracking-[0.1em] mt-[1px]">{t('app.subtitle')}</div>
           </div>
         </div>
-        <div className="flex items-center gap-[10px]">
+        <div className="flex shrink-0 items-center gap-[8px]">
           <LanguageSwitcher />
-          <div className="flex items-center gap-[5px] bg-green2 border border-green3 rounded-[20px] px-[10px] py-[5px] text-[10px] font-[600] text-green tracking-[0.06em]">
+          <div className="hidden items-center gap-[5px] rounded-[20px] border border-green3 bg-green2 px-[8px] py-[5px] text-[10px] font-[600] text-green tracking-[0.04em] min-[390px]:flex">
             <div className="w-[5px] h-[5px] rounded-full bg-green animate-pulse-fast"></div>
-            {t('app.live')}
+            <span>{t('app.live')}</span>
           </div>
           <div className="w-[34px] h-[34px] rounded-full bg-bg3 border border-border2 flex items-center justify-center text-[13px] font-[700] text-muted overflow-hidden">
              {user?.photo_url ? (
@@ -179,7 +182,7 @@ export default function Home() {
       {/* Mode Selection */}
       <div className="relative z-10 text-[10px] font-[600] tracking-[0.14em] uppercase text-muted px-[20px] pt-[18px] pb-[10px]">{t('home.actionTitle')}</div>
       <div className="relative z-10 px-[16px] pt-[16px] pb-0">
-        <div className="grid grid-cols-2 gap-[8px]">
+        <div className="grid grid-cols-1 gap-[8px] min-[360px]:grid-cols-2">
           
           <div 
             onClick={() => { WebApp.HapticFeedback.selectionChanged(); setDirection('GIVE_CASH'); }}
@@ -234,27 +237,29 @@ export default function Home() {
       </div>
 
       {/* Rate Banner */}
-      <div className="relative z-10 m-[12px_16px_0] bg-bg2 border border-border rounded-r p-[12px_16px] flex items-center justify-between">
-        <div className="flex items-center gap-[8px]">
+      <div className="relative z-10 m-[12px_16px_0] rounded-r border border-border bg-bg2 p-[12px_16px]">
+        <div className="flex flex-col gap-[10px] min-[360px]:flex-row min-[360px]:items-center min-[360px]:justify-between">
+          <div className="flex min-w-0 items-center gap-[8px]">
           <div className="w-[28px] h-[28px] flex items-center justify-center">
             <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
               <circle cx="14" cy="14" r="13" fill="#1B3D2F" stroke="#26A17B" strokeWidth="1"/>
               <text x="14" y="18.5" textAnchor="middle" fontFamily="'JetBrains Mono',monospace" fontSize="10" fontWeight="700" fill="#26A17B">₮</text>
             </svg>
           </div>
-          <div>
+            <div className="min-w-0">
             <div className="text-[11px] text-muted font-[500]">{t('home.rateLabel')}</div>
-            <div className="font-mono text-[14px] font-[600] text-text mt-[1px]">1 EUR = {currentRate.toFixed(4)} USDT</div>
+              <div className="mt-[1px] break-words font-mono text-[13px] font-[600] text-text min-[360px]:text-[14px]">1 EUR = {currentRate.toFixed(4)} USDT</div>
             <div className="mt-[4px] text-[10px] font-[500] text-dim">{t('home.rateUpdated', { time: formattedRateUpdatedAt })}</div>
+            </div>
           </div>
+          <div className="font-mono text-[11px] font-[500] text-green">LIVE</div>
         </div>
-        <div className="font-mono text-[11px] font-[500] text-green">LIVE</div>
       </div>
 
       <div className="relative z-10 mx-[16px] mt-[12px] rounded-r2 border border-border2 bg-bg2 p-[16px]">
         <div className="mb-[10px] text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.clientCardTitle')}</div>
         {currentUserStats ? (
-          <div className="grid grid-cols-3 gap-[8px]">
+          <div className="grid grid-cols-1 gap-[8px] min-[360px]:grid-cols-3">
             <div className="rounded-r border border-border bg-bg3 p-[12px]">
               <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-muted">{t('home.clientDeals')}</div>
               <div className="mt-[6px] font-mono text-[18px] font-[700] text-text">{currentUserStats.deals}</div>
@@ -273,6 +278,16 @@ export default function Home() {
         ) : (
           <div className="text-[13px] font-[500] text-muted">{t('home.clientCardEmpty')}</div>
         )}
+      </div>
+
+      <div className="relative z-10 mx-[16px] mt-[12px] rounded-r2 border border-green3 bg-green2 p-[14px]">
+        <div className="text-[11px] font-[600] uppercase tracking-[0.08em] text-green">{t('home.securityCodeTitle')}</div>
+        <div className="mt-[6px] flex flex-col gap-[4px] min-[360px]:flex-row min-[360px]:items-center min-[360px]:justify-between">
+          <div className="text-[12px] font-[500] leading-relaxed text-text">{t('home.securityCodeHint')}</div>
+          <div className="self-start rounded-[8px] border border-green3 bg-[rgba(10,11,15,0.35)] px-[10px] py-[6px] font-mono text-[13px] font-[700] tracking-[0.12em] text-green">
+            {antiPhishingCode}
+          </div>
+        </div>
       </div>
 
       {/* Amount Input */}
@@ -308,16 +323,16 @@ export default function Home() {
               min="0" 
               step="50" 
               inputMode="decimal"
-              className="flex-1 bg-transparent border-none outline-none font-mono text-[34px] font-[600] text-text w-full placeholder:text-dim"
+              className="flex-1 bg-transparent border-none outline-none font-mono text-[28px] font-[600] text-text w-full placeholder:text-dim min-[360px]:text-[34px]"
             />
           </div>
           
-          <div className="flex gap-[6px] mt-[12px] pt-[12px] border-t border-border">
+          <div className="mt-[12px] flex flex-wrap gap-[6px] border-t border-border pt-[12px]">
             {[100, 250, 500, 1000, 5000].map(val => (
               <div 
                 key={val} 
                 onClick={() => setAmount(val)}
-                className="flex-1 py-[7px] bg-bg3 border border-border rounded-[8px] text-[11px] font-[600] text-muted cursor-pointer text-center transition-all hover:border-border3 hover:text-text active:scale-95"
+                className="min-w-[56px] flex-1 py-[7px] bg-bg3 border border-border rounded-[8px] text-[11px] font-[600] text-muted cursor-pointer text-center transition-all hover:border-border3 hover:text-text active:scale-95"
               >
                 {val >= 1000 ? `${val/1000}K` : val}
               </div>
@@ -398,7 +413,7 @@ export default function Home() {
 
       <div className="relative z-10 mx-[16px] mt-[12px] rounded-r2 border border-border2 bg-bg2 p-[16px]">
         <div className="mb-[10px] text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.reserveTitle')}</div>
-        <div className="grid grid-cols-2 gap-[8px]">
+        <div className="grid grid-cols-1 gap-[8px] min-[360px]:grid-cols-2">
           <div className="rounded-r border border-border bg-bg3 p-[12px]">
             <div className="text-[11px] font-[600] uppercase tracking-[0.06em] text-muted">{t('home.reserveUsdt')}</div>
             <div className="mt-[6px] font-mono text-[20px] font-[700] text-text">{usdtReserve.toFixed(2)}</div>
@@ -416,7 +431,7 @@ export default function Home() {
       <div className="relative z-10 text-[10px] font-[600] tracking-[0.14em] uppercase text-muted px-[20px] pt-[18px] pb-[10px]">{t('home.cityTitle')}</div>
       <div className="relative z-10 px-[16px]">
         <div className="mb-[12px] rounded-r2 border border-border2 bg-bg2 p-[14px]">
-          <div className="mb-[10px] flex items-center justify-between gap-[10px]">
+          <div className="mb-[10px] flex flex-col gap-[6px] min-[360px]:flex-row min-[360px]:items-center min-[360px]:justify-between">
             <div className="text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.searchLabel')}</div>
             <div className="text-[11px] font-[500] text-muted">{t('home.cityCount', { count: filteredCities.length })}</div>
           </div>
@@ -430,7 +445,7 @@ export default function Home() {
         </div>
 
         {filteredCities.length > 0 ? (
-          <div className="grid grid-cols-2 gap-[8px]">
+          <div className="grid grid-cols-1 gap-[8px] min-[360px]:grid-cols-2">
             {filteredCities.map(city => (
               <button
                 key={city.id}
@@ -440,7 +455,7 @@ export default function Home() {
                 <div className={`w-[28px] h-[28px] rounded-[8px] bg-bg3 border flex items-center justify-center text-[14px] shrink-0 ${selectedCityId === city.id ? 'border-[rgba(0,208,132,0.3)]' : 'border-border'}`}>
                   {CITY_FLAGS[city.cityKey] ?? '📍'}
                 </div>
-                <div className={`text-[13px] font-[600] transition-colors ${selectedCityId === city.id ? 'text-text' : 'text-muted'}`}>
+                <div className={`min-w-0 text-left text-[13px] font-[600] transition-colors ${selectedCityId === city.id ? 'text-text' : 'text-muted'}`}>
                   {t(`cities.${city.cityKey}`)}
                 </div>
               </button>
@@ -486,7 +501,7 @@ export default function Home() {
                     : t('admin.managerEmpty')}
                 </div>
                 <div className="mt-[4px] text-[11px] font-[500] text-dim">
-                  {new Date(order.createdAt).toLocaleString()}
+                  {new Date(order.createdAt).toLocaleString(language)}
                 </div>
                 <button
                   type="button"

@@ -16,9 +16,11 @@ export default function Admin() {
     rateUpdatedAt,
     orders,
     usdtReserve,
+    antiPhishingCode,
     updateCityLimit,
     updateUsdtReserve,
     updateRate,
+    updateAntiPhishingCode,
     toggleCityActive,
     updateOrderStatus,
     updateOrderManager,
@@ -33,6 +35,7 @@ export default function Admin() {
   );
   const [editRate, setEditRate] = useState(rates.EUR_USDT.toString());
   const [editUsdtReserve, setEditUsdtReserve] = useState(usdtReserve.toString());
+  const [editAntiPhishingCode, setEditAntiPhishingCode] = useState(antiPhishingCode);
   const [editManagers, setEditManagers] = useState<Record<string, string>>(
     orders.reduce((acc, order) => ({ ...acc, [order.id]: order.managerName ?? '' }), {}),
   );
@@ -123,7 +126,8 @@ export default function Admin() {
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
-      className="flex-1 flex flex-col px-[16px] pt-[20px] pb-[32px]"
+      className="flex-1 flex flex-col px-[16px] pb-[32px] pt-[20px]"
+      style={{ paddingTop: 'max(20px, env(safe-area-inset-top))' }}
     >
       <div className="flex items-center justify-between gap-[12px] mb-[24px]">
         <div className="flex items-center gap-[12px]">
@@ -161,7 +165,7 @@ export default function Admin() {
                   </button>
                 </div>
 
-                <div className="flex items-center gap-[8px]">
+                <div className="flex flex-col gap-[8px] min-[360px]:flex-row min-[360px]:items-center">
                   <div className="flex-1 relative">
                     <span className="absolute left-[12px] top-1/2 -translate-y-1/2 text-muted font-mono">€</span>
                     <input 
@@ -173,7 +177,7 @@ export default function Admin() {
                   </div>
                   <button 
                     onClick={() => handleSave(city.id)}
-                    className="bg-bg2 border border-border2 hover:border-green hover:text-green text-muted px-[16px] py-[10px] rounded-[8px] text-[12px] font-[600] transition-colors"
+                    className="bg-bg2 border border-border2 hover:border-green hover:text-green text-muted px-[16px] py-[10px] rounded-[8px] text-[12px] font-[600] transition-colors min-[360px]:self-auto"
                   >
                     {t('admin.save')}
                   </button>
@@ -235,7 +239,7 @@ export default function Admin() {
             <span className="text-[10px] bg-[rgba(38,161,123,0.12)] text-usdt px-[8px] py-[4px] rounded-[6px] uppercase tracking-[0.06em] font-[600]">USDT</span>
           </div>
 
-          <div className="flex items-center gap-[8px]">
+          <div className="flex flex-col gap-[8px] min-[360px]:flex-row min-[360px]:items-center">
             <div className="flex-1 relative">
               <span className="absolute left-[12px] top-1/2 -translate-y-1/2 text-muted font-mono">₮</span>
               <input
@@ -255,6 +259,37 @@ export default function Admin() {
 
           <div className="text-[12px] font-[500] text-muted">
             {t('admin.usdtReserveLabel')}: <span className="font-mono text-text">{usdtReserve.toFixed(2)}</span>
+          </div>
+        </div>
+
+        <div className="bg-bg2 border-[1.5px] border-border2 rounded-r2 p-[20px] space-y-[16px]">
+          <div className="flex justify-between items-center mb-[8px]">
+            <h2 className="text-[14px] font-[700] text-text">{t('admin.securityCodeTitle')}</h2>
+            <span className="text-[10px] bg-green2 text-green px-[8px] py-[4px] rounded-[6px] uppercase tracking-[0.06em] font-[600]">
+              {antiPhishingCode}
+            </span>
+          </div>
+
+          <div className="text-[12px] font-[500] leading-relaxed text-muted">
+            {t('admin.securityCodeHint')}
+          </div>
+
+          <div className="flex flex-col gap-[8px] min-[360px]:flex-row min-[360px]:items-center">
+            <input
+              type="text"
+              value={editAntiPhishingCode}
+              onChange={(e) => setEditAntiPhishingCode(e.target.value.toUpperCase())}
+              placeholder={t('admin.securityCodePlaceholder')}
+              maxLength={16}
+              className="w-full flex-1 rounded-[10px] border border-border2 bg-bg3 px-[12px] py-[10px] text-[13px] font-mono uppercase tracking-[0.12em] text-text outline-none transition-colors placeholder:text-dim focus:border-green"
+            />
+            <button
+              type="button"
+              onClick={() => updateAntiPhishingCode(editAntiPhishingCode)}
+              className="rounded-[10px] border border-border2 bg-bg3 px-[14px] py-[10px] text-[11px] font-[700] uppercase tracking-[0.05em] text-muted transition-colors hover:border-green hover:text-green"
+            >
+              {t('admin.save')}
+            </button>
           </div>
         </div>
 
@@ -371,7 +406,7 @@ export default function Admin() {
                       <div className="mb-[8px] text-[11px] font-[600] uppercase tracking-[0.06em] text-muted">
                         {t('admin.clientStatsTitle')}
                       </div>
-                      <div className="grid grid-cols-3 gap-[8px]">
+                      <div className="grid grid-cols-1 gap-[8px] min-[360px]:grid-cols-3">
                         <div className="rounded-[8px] border border-border2 bg-bg3 px-[10px] py-[8px]">
                           <div className="text-[10px] font-[600] uppercase tracking-[0.05em] text-muted">{t('home.clientDeals')}</div>
                           <div className="mt-[4px] font-mono text-[15px] font-[700] text-text">{clientStats.deals}</div>
@@ -394,7 +429,7 @@ export default function Admin() {
                     <div className="mb-[8px] text-[11px] font-[600] uppercase tracking-[0.06em] text-muted">
                       {t('admin.managerLabel')}
                     </div>
-                    <div className="flex items-center gap-[8px]">
+                    <div className="flex flex-col gap-[8px] min-[360px]:flex-row min-[360px]:items-center">
                       <input
                         type="text"
                         value={editManagers[order.id] ?? order.managerName ?? ''}
