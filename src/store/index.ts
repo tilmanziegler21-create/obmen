@@ -1,25 +1,53 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { ExchangeState, City, Rates } from '../types';
+import { ExchangeState, City, Rates, ExchangeOrder, OrderStatus } from '../types';
+
+const LEGACY_CITY_NAME_TO_KEY: Record<string, string> = {
+  'Берлин': 'berlin',
+  'Мюнхен': 'munich',
+  'Гамбург': 'hamburg',
+  'Франкфурт': 'frankfurt',
+  'Кёльн': 'cologne',
+  'Дюссельдорф': 'dusseldorf',
+};
 
 const INITIAL_CITIES: City[] = [
-  { id: '1', name: 'Берлин', isActive: true, limitEUR: 500 },
-  { id: '2', name: 'Мюнхен', isActive: true, limitEUR: 500 },
-  { id: '3', name: 'Гамбург', isActive: true, limitEUR: 500 },
-  { id: '4', name: 'Франкфурт', isActive: true, limitEUR: 500 },
-  { id: '5', name: 'Кёльн', isActive: true, limitEUR: 500 },
-  { id: '6', name: 'Дюссельдорф', isActive: true, limitEUR: 500 },
+  { id: '1', cityKey: 'berlin', isActive: true, limitEUR: 500 },
+  { id: '2', cityKey: 'munich', isActive: true, limitEUR: 500 },
+  { id: '3', cityKey: 'hamburg', isActive: true, limitEUR: 500 },
+  { id: '4', cityKey: 'frankfurt', isActive: true, limitEUR: 500 },
+  { id: '5', cityKey: 'cologne', isActive: true, limitEUR: 500 },
+  { id: '6', cityKey: 'dusseldorf', isActive: true, limitEUR: 500 },
+  { id: '7', cityKey: 'stuttgart', isActive: true, limitEUR: 500 },
+  { id: '8', cityKey: 'leipzig', isActive: true, limitEUR: 500 },
+  { id: '9', cityKey: 'dortmund', isActive: true, limitEUR: 500 },
+  { id: '10', cityKey: 'essen', isActive: true, limitEUR: 500 },
+  { id: '11', cityKey: 'bremen', isActive: true, limitEUR: 500 },
+  { id: '12', cityKey: 'hannover', isActive: true, limitEUR: 500 },
+  { id: '13', cityKey: 'nuremberg', isActive: true, limitEUR: 500 },
 ];
 
 const MOCK_RATES: Rates = {
   EUR_USDT: 1.08, // 1 EUR = 1.08 USDT
 };
 
+const ACTIVE_ORDER_STATUSES: Set<OrderStatus> = new Set(['accepted', 'processing']);
+const DEFAULT_CHECKOUT_PREFILL = {
+  sourceOrderId: null,
+  contact: '',
+  wallet: '',
+  network: 'TRC-20',
+} as const;
+
 export const useStore = create<ExchangeState>()(
   persist(
     (set, get) => ({
       cities: INITIAL_CITIES,
       rates: MOCK_RATES,
+      rateUpdatedAt: new Date().toISOString(),
+      orders: [],
+      usdtReserve: 2500,
+      checkoutPrefill: DEFAULT_CHECKOUT_PREFILL,
       isLoading: false,
       
       selectedCityId: null,
@@ -33,6 +61,13 @@ export const useStore = create<ExchangeState>()(
           city.id === id ? { ...city, limitEUR: limit } : city
         )
       })),
+
+      updateUsdtReserve: (amount) => set({ usdtReserve: amount }),
+
+      updateRate: (rate) => set({
+        rates: { EUR_USDT: rate },
+        rateUpdatedAt: new Date().toISOString(),
+      }),
       
       toggleCityActive: (id) => set((state) => ({
         cities: state.cities.map(city => 
@@ -52,6 +87,112 @@ export const useStore = create<ExchangeState>()(
         set({ getAmount: amount });
         get().calculateGiveAmount();
       },
+
+      applyOrderTemplate: (id) => set((state) => {
+        const order = state.orders.find((item) => item.id === id);
+
+        if (!order) {
+          return state;
+        }
+
+        return {
+          selectedCityId: order.cityId,
+          direction: order.direction,
+          giveAmount: order.giveAmount,
+          getAmount: order.getAmount,
+          checkoutPrefill: {
+            sourceOrderId: order.id,
+            contact: order.contact ?? '',
+            wallet: order.wallet ?? '',
+            network: order.network ?? DEFAULT_CHECKOUT_PREFILL.network,
+          },
+        };
+      }),
+
+      clearCheckoutPrefill: () => set({ checkoutPrefill: DEFAULT_CHECKOUT_PREFILL }),
+
+      createOrder: (order) => {
+        const createdOrder: ExchangeOrder = {
+          ...order,
+          id: `CB-${Date.now().toString().slice(-8)}`,
+          createdAt: new Date().toISOString(),
+          status: 'accepted',
+        };
+
+        set((state) => ({
+          usdtReserve:
+            order.direction === 'GIVE_CASH'
+              ? Math.max(0, state.usdtReserve - Number(order.getAmount))
+              : state.usdtReserve,
+          cities:
+            order.direction === 'GIVE_USDT'
+              ? state.cities.map((city) =>
+                  city.id === order.cityId
+                    ? { ...city, limitEUR: Math.max(0, city.limitEUR - Number(order.getAmount)) }
+                    : city,
+                )
+              : state.cities,
+          orders: [createdOrder, ...state.orders],
+        }));
+
+        return createdOrder;
+      },
+
+      updateOrderStatus: (id, status) => set((state) => {
+        const existingOrder = state.orders.find((order) => order.id === id);
+
+        if (!existingOrder || existingOrder.status === status) {
+          return state;
+        }
+
+        const wasActive = ACTIVE_ORDER_STATUSES.has(existingOrder.status);
+        const isActive = ACTIVE_ORDER_STATUSES.has(status);
+        const shouldReleaseReserve = wasActive && !isActive && status === 'rejected';
+        const shouldReserveAgain = !wasActive && isActive && existingOrder.status === 'rejected';
+
+        return {
+          usdtReserve:
+            existingOrder.direction === 'GIVE_CASH'
+              ? shouldReleaseReserve
+                ? state.usdtReserve + Number(existingOrder.getAmount)
+                : shouldReserveAgain
+                  ? Math.max(0, state.usdtReserve - Number(existingOrder.getAmount))
+                  : state.usdtReserve
+              : state.usdtReserve,
+          cities:
+            existingOrder.direction === 'GIVE_USDT'
+              ? state.cities.map((city) => {
+                  if (city.id !== existingOrder.cityId) {
+                    return city;
+                  }
+
+                  if (shouldReleaseReserve) {
+                    return { ...city, limitEUR: city.limitEUR + Number(existingOrder.getAmount) };
+                  }
+
+                  if (shouldReserveAgain) {
+                    return { ...city, limitEUR: Math.max(0, city.limitEUR - Number(existingOrder.getAmount)) };
+                  }
+
+                  return city;
+                })
+              : state.cities,
+          orders: state.orders.map((order) =>
+            order.id === id ? { ...order, status } : order
+          ),
+        };
+      }),
+
+      updateOrderManager: (id, managerName) => set((state) => ({
+        orders: state.orders.map((order) =>
+          order.id === id
+            ? {
+                ...order,
+                managerName: managerName && managerName.trim().length > 0 ? managerName.trim() : null,
+              }
+            : order,
+        ),
+      })),
       
       calculateGetAmount: () => {
         const { giveAmount, direction, rates } = get();
@@ -108,8 +249,45 @@ export const useStore = create<ExchangeState>()(
     }),
     {
       name: 'cryptobull-storage',
-      // Only persist cities and rates, reset user inputs on reload
-      partialize: (state) => ({ cities: state.cities, rates: state.rates }),
+      version: 5,
+      // Persist core admin and order data, reset user inputs on reload
+      partialize: (state) => ({
+        cities: state.cities,
+        rates: state.rates,
+        rateUpdatedAt: state.rateUpdatedAt,
+        orders: state.orders,
+        usdtReserve: state.usdtReserve,
+      }),
+      migrate: (persistedState) => {
+        const state = persistedState as ExchangeState & {
+          cities?: Array<City & { name?: string }>;
+          orders?: ExchangeOrder[];
+          usdtReserve?: number;
+          rateUpdatedAt?: string;
+        };
+
+        if (!state?.cities) {
+          return persistedState as ExchangeState;
+        }
+
+        return {
+          ...state,
+          orders: (state.orders ?? []).map((order) => ({
+            ...order,
+            managerName: order.managerName ?? null,
+          })),
+          usdtReserve: state.usdtReserve ?? 2500,
+          rateUpdatedAt: state.rateUpdatedAt ?? new Date().toISOString(),
+          cities: state.cities.map((city) => {
+            const legacyCity = city as City & { name?: string };
+
+            return {
+              ...city,
+              cityKey: legacyCity.cityKey ?? LEGACY_CITY_NAME_TO_KEY[legacyCity.name ?? ''] ?? 'berlin',
+            };
+          }),
+        } satisfies ExchangeState;
+      },
     }
   )
 );

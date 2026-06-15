@@ -5,9 +5,11 @@ import Home from './pages/Home';
 import Checkout from './pages/Checkout';
 import Admin from './pages/Admin';
 import { useStore } from './store';
+import { useI18n } from './i18n';
 
 function App() {
   const fetchInitialData = useStore(state => state.fetchInitialData);
+  const { t } = useI18n();
 
   useEffect(() => {
     // Initialize Telegram Web App
@@ -16,9 +18,10 @@ function App() {
     
     // Set theme colors from Telegram if needed, but we force dark mode per requirements
     document.documentElement.classList.add('dark');
+    document.title = t('app.title');
     
     fetchInitialData();
-  }, [fetchInitialData]);
+  }, [fetchInitialData, t]);
 
   return (
     <BrowserRouter>

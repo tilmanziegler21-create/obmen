@@ -1,0 +1,789 @@
+/* eslint-disable react-refresh/only-export-components */
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import WebApp from '@twa-dev/sdk';
+
+export type Language = 'ru' | 'en' | 'uk' | 'de';
+
+interface TranslationDictionary {
+  [key: string]: string | TranslationDictionary;
+}
+
+type TranslationParams = Record<string, string | number>;
+
+interface I18nContextValue {
+  language: Language;
+  setLanguage: (language: Language) => void;
+  t: (key: string, params?: TranslationParams) => string;
+}
+
+const LANGUAGE_STORAGE_KEY = 'cryptobull-language';
+
+const dictionaries: Record<Language, TranslationDictionary> = {
+  ru: {
+    app: {
+      title: 'CryptoBull',
+      subtitle: 'P2P обмен',
+      live: 'LIVE',
+      avatarAlt: 'Аватар',
+    },
+    languages: {
+      ru: 'RU',
+      en: 'EN',
+      uk: 'UK',
+      de: 'DE',
+    },
+    home: {
+      actionTitle: 'Что хотите сделать?',
+      giveCashTitle: 'Отдаю наличные',
+      giveCashSubtitle: 'Получаю USDT',
+      giveUsdtTitle: 'Отдаю USDT',
+      giveUsdtSubtitle: 'Получаю наличные',
+      rateLabel: 'Курс EUR / USDT',
+      rateUpdated: 'Обновлено {{time}}',
+      amountTitle: 'Сумма',
+      youGive: 'Вы отдаёте',
+      reserveTitle: 'Резервы',
+      reserveUsdt: 'Доступно USDT',
+      reserveCash: 'Доступно EUR в городе',
+      searchLabel: 'Поиск города',
+      searchPlaceholder: 'Найти город',
+      cityCount: 'Найдено городов: {{count}}',
+      noCitiesFound: 'По вашему запросу города не найдены',
+      queueTitle: 'Очередь обменов',
+      queueEmpty: 'Сейчас новых заявок нет, обмен доступен без ожидания',
+      queueActive: 'Перед вами {{count}} заявок',
+      queueEta: 'Ориентировочное ожидание: {{minutes}} минут',
+      clientCardTitle: 'Профиль клиента',
+      clientCardEmpty: 'После первой заявки здесь появится ваша статистика',
+      clientDeals: 'Обменов',
+      clientVolume: 'Оборот',
+      clientSince: 'С нами с',
+      quickExchangeTitle: 'Быстрый обмен',
+      quickExchangeEmpty: 'После первой сделки здесь появится быстрый повтор',
+      repeatLastDeal: 'Повторить прошлую сделку',
+      quickExchangeAction: 'Быстрый обмен',
+      historyTitle: 'Последние заявки',
+      historyEmpty: 'История заявок появится после первого обмена',
+      orderFromTo: '{{from}} -> {{to}}',
+      orderNumber: 'Заявка {{id}}',
+      repeatOrder: 'Повторить',
+      cityInactive: 'В этом городе обмен временно недоступен',
+      cityRequired: 'Выберите город для обмена',
+      cityCashReserveError: 'В выбранном городе сейчас нет такого объема наличных EUR',
+      usdtReserveError: 'Резерв USDT временно исчерпан. Оставьте заявку позже',
+      assetCrypto: 'Криптовалюта',
+      assetCash: 'Наличные',
+      infoCash: 'Комиссия 4% · Через 30 минут вы получите место выдачи наличных',
+      infoUsdt: 'Комиссия 4% · Через 30 минут встреча, получение наличных EUR',
+      cityTitle: 'Город встречи',
+      limitError: 'Лимит обмена 500 EUR, для большей суммы создайте отдельную заявку',
+      amountError: 'Сумма в EUR должна быть кратна 10 (без копеек).',
+      ctaCash: 'ПЕРЕЙТИ К ОФОРМЛЕНИЮ',
+      ctaUsdt: 'ПОДТВЕРДИТЬ ОБМЕН',
+    },
+    checkout: {
+      title: 'Оформление',
+      detailsTitle: 'Детали сделки',
+      city: 'Город',
+      youGive: 'Вы отдаете',
+      youGet: 'Вы получаете',
+      fixedRate: 'Курс фиксации',
+      quickExchangeBadge: 'Быстрый обмен',
+      repeatSource: 'Повтор заявки {{id}}',
+      reserveError: 'Недостаточно ликвидности для этой заявки. Проверьте резервы и сумму.',
+      networkLabel: 'Сеть перевода USDT',
+      walletLabel: 'Адрес кошелька ({{network}})',
+      walletPlaceholder: 'T9yD14Nj9yD14N...',
+      contactLabel: 'Контакт для связи (Telegram)',
+      contactPlaceholder: '@username',
+      submitting: 'ОТПРАВКА...',
+      submitCash: 'ПОЛУЧИТЬ USDT',
+      submitUsdt: 'ПОЛУЧИТЬ НАЛИЧНЫЕ',
+      successTitle: 'Заявка создана!',
+      successCash: 'Через 30 минут вы получите координаты места выдачи наличных. Окно закроется автоматически.',
+      successUsdt: 'Через 30 минут встреча, получение наличных EUR. Окно закроется автоматически.',
+      unknownUser: 'Неизвестный',
+      telegramApiError: 'Ошибка Telegram API: {{message}}',
+      telegramNetworkError: 'Ошибка сети при отправке в Telegram: {{message}}',
+      telegramConfigError: 'Ошибка: не настроены ключи бота (BOT_TOKEN или CHAT_ID)',
+      networkTimes: {
+        trc20: '3 мин',
+        erc20: '10 мин',
+        ton: '1 мин',
+      },
+    },
+    admin: {
+      accessDenied: 'Доступ запрещен',
+      title: 'Панель администратора',
+      cashManagement: 'Управление кассами',
+      reserveManagement: 'Управление резервами',
+      rateManagement: 'Управление курсом',
+      ordersTitle: 'Заявки',
+      ordersEmpty: 'Пока нет заявок',
+      ordersNotFound: 'По заданным фильтрам заявки не найдены',
+      clientStatsTitle: 'Статистика клиента',
+      managerLabel: 'Менеджер',
+      managerPlaceholder: 'Имя менеджера',
+      managerEmpty: 'Не назначен',
+      managerAssigned: 'Назначен {{name}}',
+      statusLabel: 'Статус',
+      searchLabel: 'Поиск заявки',
+      searchPlaceholder: 'Номер, контакт или Telegram',
+      cityFilterLabel: 'Город',
+      statusFilterLabel: 'Статус',
+      directionFilterLabel: 'Направление',
+      allStatuses: 'Все статусы',
+      allCities: 'Все города',
+      allDirections: 'Все направления',
+      filteredCount: 'Найдено заявок: {{count}}',
+      usdtReserveLabel: 'Резерв USDT',
+      rateInputLabel: 'Базовый курс EUR -> USDT',
+      rateCurrentLabel: 'Текущий курс',
+      rateUpdatedLabel: 'Последнее обновление',
+      eurOnly: 'EUR Only',
+      active: 'Активен',
+      disabled: 'Отключен',
+      save: 'Сохранить',
+    },
+    common: {
+      empty: 'Пусто',
+    },
+    orderStatus: {
+      accepted: 'Принято',
+      processing: 'В обработке',
+      ready: 'Готово',
+      rejected: 'Отклонено',
+    },
+    cities: {
+      berlin: 'Берлин',
+      munich: 'Мюнхен',
+      hamburg: 'Гамбург',
+      frankfurt: 'Франкфурт',
+      cologne: 'Кёльн',
+      dusseldorf: 'Дюссельдорф',
+      stuttgart: 'Штутгарт',
+      leipzig: 'Лейпциг',
+      dortmund: 'Дортмунд',
+      essen: 'Эссен',
+      bremen: 'Бремен',
+      hannover: 'Ганновер',
+      nuremberg: 'Нюрнберг',
+    },
+    telegram: {
+      newOrder: 'Новая заявка на обмен!',
+      direction: 'Направление:',
+      cashToUsdt: 'Наличные EUR ➔ USDT',
+      usdtToCash: 'USDT ➔ Наличные EUR',
+      city: 'Город:',
+      give: 'Отдают:',
+      get: 'Получают:',
+      rate: 'Курс:',
+      network: 'Сеть:',
+      wallet: 'Кошелек:',
+      contact: 'Контакт клиента:',
+      client: 'Telegram клиента:',
+    },
+    directions: {
+      giveCash: 'Наличные EUR -> USDT',
+      giveUsdt: 'USDT -> Наличные EUR',
+    },
+  },
+  en: {
+    app: {
+      title: 'CryptoBull',
+      subtitle: 'P2P Exchange',
+      live: 'LIVE',
+      avatarAlt: 'Avatar',
+    },
+    languages: {
+      ru: 'RU',
+      en: 'EN',
+      uk: 'UK',
+      de: 'DE',
+    },
+    home: {
+      actionTitle: 'What do you want to do?',
+      giveCashTitle: 'Give cash',
+      giveCashSubtitle: 'Receive USDT',
+      giveUsdtTitle: 'Give USDT',
+      giveUsdtSubtitle: 'Receive cash',
+      rateLabel: 'EUR / USDT rate',
+      rateUpdated: 'Updated {{time}}',
+      amountTitle: 'Amount',
+      youGive: 'You give',
+      reserveTitle: 'Reserves',
+      reserveUsdt: 'Available USDT',
+      reserveCash: 'Available EUR in city',
+      searchLabel: 'City search',
+      searchPlaceholder: 'Find a city',
+      cityCount: 'Cities found: {{count}}',
+      noCitiesFound: 'No cities found for your search',
+      queueTitle: 'Exchange queue',
+      queueEmpty: 'No new requests right now, exchange is available without waiting',
+      queueActive: '{{count}} requests ahead of you',
+      queueEta: 'Estimated wait: {{minutes}} minutes',
+      clientCardTitle: 'Client profile',
+      clientCardEmpty: 'Your stats will appear here after the first request',
+      clientDeals: 'Deals',
+      clientVolume: 'Volume',
+      clientSince: 'With us since',
+      quickExchangeTitle: 'Quick exchange',
+      quickExchangeEmpty: 'After your first deal, quick repeat will appear here',
+      repeatLastDeal: 'Repeat last deal',
+      quickExchangeAction: 'Quick exchange',
+      historyTitle: 'Recent requests',
+      historyEmpty: 'Your request history will appear after the first exchange',
+      orderFromTo: '{{from}} -> {{to}}',
+      orderNumber: 'Request {{id}}',
+      repeatOrder: 'Repeat',
+      cityInactive: 'Exchange is temporarily unavailable in this city',
+      cityRequired: 'Select a city for exchange',
+      cityCashReserveError: 'There is not enough EUR cash in the selected city right now',
+      usdtReserveError: 'USDT reserve is temporarily exhausted. Please try again later',
+      assetCrypto: 'Crypto',
+      assetCash: 'Cash',
+      infoCash: '4% fee · In 30 minutes you will receive the cash pickup location',
+      infoUsdt: '4% fee · In 30 minutes you will meet and receive EUR cash',
+      cityTitle: 'Meeting city',
+      limitError: 'Exchange limit is 500 EUR, create a separate request for larger amounts',
+      amountError: 'EUR amount must be a multiple of 10 (no cents).',
+      ctaCash: 'CONTINUE TO CHECKOUT',
+      ctaUsdt: 'CONFIRM EXCHANGE',
+    },
+    checkout: {
+      title: 'Checkout',
+      detailsTitle: 'Deal details',
+      city: 'City',
+      youGive: 'You give',
+      youGet: 'You get',
+      fixedRate: 'Fixed rate',
+      quickExchangeBadge: 'Quick exchange',
+      repeatSource: 'Repeat request {{id}}',
+      reserveError: 'Not enough liquidity for this request. Check reserves and amount.',
+      networkLabel: 'USDT transfer network',
+      walletLabel: 'Wallet address ({{network}})',
+      walletPlaceholder: 'T9yD14Nj9yD14N...',
+      contactLabel: 'Contact for communication (Telegram)',
+      contactPlaceholder: '@username',
+      submitting: 'SENDING...',
+      submitCash: 'RECEIVE USDT',
+      submitUsdt: 'RECEIVE CASH',
+      successTitle: 'Request created!',
+      successCash: 'In 30 minutes you will receive the cash pickup location. This window will close automatically.',
+      successUsdt: 'In 30 minutes you will meet and receive EUR cash. This window will close automatically.',
+      unknownUser: 'Unknown',
+      telegramApiError: 'Telegram API error: {{message}}',
+      telegramNetworkError: 'Network error while sending to Telegram: {{message}}',
+      telegramConfigError: 'Error: bot keys are not configured (BOT_TOKEN or CHAT_ID)',
+      networkTimes: {
+        trc20: '3 min',
+        erc20: '10 min',
+        ton: '1 min',
+      },
+    },
+    admin: {
+      accessDenied: 'Access denied',
+      title: 'Admin panel',
+      cashManagement: 'Cash management',
+      reserveManagement: 'Reserve management',
+      rateManagement: 'Rate management',
+      ordersTitle: 'Orders',
+      ordersEmpty: 'No orders yet',
+      ordersNotFound: 'No orders match the selected filters',
+      clientStatsTitle: 'Client stats',
+      managerLabel: 'Manager',
+      managerPlaceholder: 'Manager name',
+      managerEmpty: 'Unassigned',
+      managerAssigned: 'Assigned to {{name}}',
+      statusLabel: 'Status',
+      searchLabel: 'Order search',
+      searchPlaceholder: 'ID, contact or Telegram',
+      cityFilterLabel: 'City',
+      statusFilterLabel: 'Status',
+      directionFilterLabel: 'Direction',
+      allStatuses: 'All statuses',
+      allCities: 'All cities',
+      allDirections: 'All directions',
+      filteredCount: 'Orders found: {{count}}',
+      usdtReserveLabel: 'USDT reserve',
+      rateInputLabel: 'Base rate EUR -> USDT',
+      rateCurrentLabel: 'Current rate',
+      rateUpdatedLabel: 'Last update',
+      eurOnly: 'EUR Only',
+      active: 'Active',
+      disabled: 'Disabled',
+      save: 'Save',
+    },
+    common: {
+      empty: 'Empty',
+    },
+    orderStatus: {
+      accepted: 'Accepted',
+      processing: 'Processing',
+      ready: 'Ready',
+      rejected: 'Rejected',
+    },
+    cities: {
+      berlin: 'Berlin',
+      munich: 'Munich',
+      hamburg: 'Hamburg',
+      frankfurt: 'Frankfurt',
+      cologne: 'Cologne',
+      dusseldorf: 'Dusseldorf',
+      stuttgart: 'Stuttgart',
+      leipzig: 'Leipzig',
+      dortmund: 'Dortmund',
+      essen: 'Essen',
+      bremen: 'Bremen',
+      hannover: 'Hanover',
+      nuremberg: 'Nuremberg',
+    },
+    telegram: {
+      newOrder: 'New exchange request!',
+      direction: 'Direction:',
+      cashToUsdt: 'Cash EUR ➔ USDT',
+      usdtToCash: 'USDT ➔ Cash EUR',
+      city: 'City:',
+      give: 'Give:',
+      get: 'Get:',
+      rate: 'Rate:',
+      network: 'Network:',
+      wallet: 'Wallet:',
+      contact: 'Client contact:',
+      client: 'Client Telegram:',
+    },
+    directions: {
+      giveCash: 'Cash EUR -> USDT',
+      giveUsdt: 'USDT -> Cash EUR',
+    },
+  },
+  uk: {
+    app: {
+      title: 'CryptoBull',
+      subtitle: 'P2P Exchange',
+      live: 'LIVE',
+      avatarAlt: 'Аватар',
+    },
+    languages: {
+      ru: 'RU',
+      en: 'EN',
+      uk: 'UK',
+      de: 'DE',
+    },
+    home: {
+      actionTitle: 'Що хочете зробити?',
+      giveCashTitle: 'Віддаю готівку',
+      giveCashSubtitle: 'Отримую USDT',
+      giveUsdtTitle: 'Віддаю USDT',
+      giveUsdtSubtitle: 'Отримую готівку',
+      rateLabel: 'Курс EUR / USDT',
+      rateUpdated: 'Оновлено {{time}}',
+      amountTitle: 'Сума',
+      youGive: 'Ви віддаєте',
+      reserveTitle: 'Резерви',
+      reserveUsdt: 'Доступно USDT',
+      reserveCash: 'Доступно EUR у місті',
+      searchLabel: 'Пошук міста',
+      searchPlaceholder: 'Знайти місто',
+      cityCount: 'Знайдено міст: {{count}}',
+      noCitiesFound: 'За вашим запитом міст не знайдено',
+      queueTitle: 'Черга обмінів',
+      queueEmpty: 'Зараз нових заявок немає, обмін доступний без очікування',
+      queueActive: 'Перед вами {{count}} заявок',
+      queueEta: 'Орієнтовне очікування: {{minutes}} хвилин',
+      clientCardTitle: 'Профіль клієнта',
+      clientCardEmpty: 'Після першої заявки тут зʼявиться ваша статистика',
+      clientDeals: 'Обмінів',
+      clientVolume: 'Оборот',
+      clientSince: 'З нами з',
+      quickExchangeTitle: 'Швидкий обмін',
+      quickExchangeEmpty: 'Після першої угоди тут зʼявиться швидкий повтор',
+      repeatLastDeal: 'Повторити минулу угоду',
+      quickExchangeAction: 'Швидкий обмін',
+      historyTitle: 'Останні заявки',
+      historyEmpty: 'Історія заявок зʼявиться після першого обміну',
+      orderFromTo: '{{from}} -> {{to}}',
+      orderNumber: 'Заявка {{id}}',
+      repeatOrder: 'Повторити',
+      cityInactive: 'У цьому місті обмін тимчасово недоступний',
+      cityRequired: 'Оберіть місто для обміну',
+      cityCashReserveError: 'У вибраному місті зараз немає такого обсягу готівки EUR',
+      usdtReserveError: 'Резерв USDT тимчасово вичерпано. Спробуйте пізніше',
+      assetCrypto: 'Криптовалюта',
+      assetCash: 'Готівка',
+      infoCash: 'Комісія 4% · Через 30 хвилин ви отримаєте місце видачі готівки',
+      infoUsdt: 'Комісія 4% · Через 30 хвилин зустріч та отримання готівки EUR',
+      cityTitle: 'Місто зустрічі',
+      limitError: 'Ліміт обміну 500 EUR, для більшої суми створіть окрему заявку',
+      amountError: 'Сума в EUR має бути кратною 10 (без центів).',
+      ctaCash: 'ПЕРЕЙТИ ДО ОФОРМЛЕННЯ',
+      ctaUsdt: 'ПІДТВЕРДИТИ ОБМІН',
+    },
+    checkout: {
+      title: 'Оформлення',
+      detailsTitle: 'Деталі угоди',
+      city: 'Місто',
+      youGive: 'Ви віддаєте',
+      youGet: 'Ви отримуєте',
+      fixedRate: 'Курс фіксації',
+      quickExchangeBadge: 'Швидкий обмін',
+      repeatSource: 'Повтор заявки {{id}}',
+      reserveError: 'Недостатньо ліквідності для цієї заявки. Перевірте резерви та суму.',
+      networkLabel: 'Мережа переказу USDT',
+      walletLabel: 'Адреса гаманця ({{network}})',
+      walletPlaceholder: 'T9yD14Nj9yD14N...',
+      contactLabel: 'Контакт для звʼязку (Telegram)',
+      contactPlaceholder: '@username',
+      submitting: 'НАДСИЛАННЯ...',
+      submitCash: 'ОТРИМАТИ USDT',
+      submitUsdt: 'ОТРИМАТИ ГОТІВКУ',
+      successTitle: 'Заявку створено!',
+      successCash: 'Через 30 хвилин ви отримаєте координати місця видачі готівки. Вікно закриється автоматично.',
+      successUsdt: 'Через 30 хвилин зустріч та отримання готівки EUR. Вікно закриється автоматично.',
+      unknownUser: 'Невідомий',
+      telegramApiError: 'Помилка Telegram API: {{message}}',
+      telegramNetworkError: 'Помилка мережі під час відправлення в Telegram: {{message}}',
+      telegramConfigError: 'Помилка: не налаштовані ключі бота (BOT_TOKEN або CHAT_ID)',
+      networkTimes: {
+        trc20: '3 хв',
+        erc20: '10 хв',
+        ton: '1 хв',
+      },
+    },
+    admin: {
+      accessDenied: 'Доступ заборонено',
+      title: 'Панель адміністратора',
+      cashManagement: 'Керування касами',
+      reserveManagement: 'Керування резервами',
+      rateManagement: 'Керування курсом',
+      ordersTitle: 'Заявки',
+      ordersEmpty: 'Заявок поки немає',
+      ordersNotFound: 'За вибраними фільтрами заявки не знайдено',
+      clientStatsTitle: 'Статистика клієнта',
+      managerLabel: 'Менеджер',
+      managerPlaceholder: 'Імʼя менеджера',
+      managerEmpty: 'Не призначено',
+      managerAssigned: 'Призначено {{name}}',
+      statusLabel: 'Статус',
+      searchLabel: 'Пошук заявки',
+      searchPlaceholder: 'Номер, контакт або Telegram',
+      cityFilterLabel: 'Місто',
+      statusFilterLabel: 'Статус',
+      directionFilterLabel: 'Напрямок',
+      allStatuses: 'Усі статуси',
+      allCities: 'Усі міста',
+      allDirections: 'Усі напрямки',
+      filteredCount: 'Знайдено заявок: {{count}}',
+      usdtReserveLabel: 'Резерв USDT',
+      rateInputLabel: 'Базовий курс EUR -> USDT',
+      rateCurrentLabel: 'Поточний курс',
+      rateUpdatedLabel: 'Останнє оновлення',
+      eurOnly: 'EUR Only',
+      active: 'Активний',
+      disabled: 'Вимкнений',
+      save: 'Зберегти',
+    },
+    common: {
+      empty: 'Порожньо',
+    },
+    orderStatus: {
+      accepted: 'Прийнято',
+      processing: 'В обробці',
+      ready: 'Готово',
+      rejected: 'Відхилено',
+    },
+    cities: {
+      berlin: 'Берлін',
+      munich: 'Мюнхен',
+      hamburg: 'Гамбург',
+      frankfurt: 'Франкфурт',
+      cologne: 'Кельн',
+      dusseldorf: 'Дюссельдорф',
+      stuttgart: 'Штутгарт',
+      leipzig: 'Лейпциг',
+      dortmund: 'Дортмунд',
+      essen: 'Ессен',
+      bremen: 'Бремен',
+      hannover: 'Ганновер',
+      nuremberg: 'Нюрнберг',
+    },
+    telegram: {
+      newOrder: 'Нова заявка на обмін!',
+      direction: 'Напрямок:',
+      cashToUsdt: 'Готівка EUR ➔ USDT',
+      usdtToCash: 'USDT ➔ Готівка EUR',
+      city: 'Місто:',
+      give: 'Віддають:',
+      get: 'Отримують:',
+      rate: 'Курс:',
+      network: 'Мережа:',
+      wallet: 'Гаманець:',
+      contact: 'Контакт клієнта:',
+      client: 'Telegram клієнта:',
+    },
+    directions: {
+      giveCash: 'Готівка EUR -> USDT',
+      giveUsdt: 'USDT -> Готівка EUR',
+    },
+  },
+  de: {
+    app: {
+      title: 'CryptoBull',
+      subtitle: 'P2P Exchange',
+      live: 'LIVE',
+      avatarAlt: 'Avatar',
+    },
+    languages: {
+      ru: 'RU',
+      en: 'EN',
+      uk: 'UK',
+      de: 'DE',
+    },
+    home: {
+      actionTitle: 'Was möchten Sie tun?',
+      giveCashTitle: 'Ich gebe Bargeld',
+      giveCashSubtitle: 'Ich erhalte USDT',
+      giveUsdtTitle: 'Ich gebe USDT',
+      giveUsdtSubtitle: 'Ich erhalte Bargeld',
+      rateLabel: 'EUR / USDT Kurs',
+      rateUpdated: 'Aktualisiert {{time}}',
+      amountTitle: 'Betrag',
+      youGive: 'Sie geben',
+      reserveTitle: 'Reserven',
+      reserveUsdt: 'Verfuegbares USDT',
+      reserveCash: 'Verfuegbare EUR in der Stadt',
+      searchLabel: 'Stadtsuche',
+      searchPlaceholder: 'Stadt finden',
+      cityCount: 'Gefundene Städte: {{count}}',
+      noCitiesFound: 'Für Ihre Suche wurden keine Städte gefunden',
+      queueTitle: 'Tauschwarteschlange',
+      queueEmpty: 'Aktuell gibt es keine neuen Anfragen, der Tausch ist ohne Wartezeit verfügbar',
+      queueActive: '{{count}} Anfragen vor Ihnen',
+      queueEta: 'Geschätzte Wartezeit: {{minutes}} Minuten',
+      clientCardTitle: 'Kundenprofil',
+      clientCardEmpty: 'Nach der ersten Anfrage erscheint hier Ihre Statistik',
+      clientDeals: 'Tausche',
+      clientVolume: 'Volumen',
+      clientSince: 'Bei uns seit',
+      quickExchangeTitle: 'Schnelltausch',
+      quickExchangeEmpty: 'Nach dem ersten Tausch erscheint hier die Schnellwiederholung',
+      repeatLastDeal: 'Letzten Tausch wiederholen',
+      quickExchangeAction: 'Schnelltausch',
+      historyTitle: 'Letzte Anfragen',
+      historyEmpty: 'Die Historie erscheint nach dem ersten Tausch',
+      orderFromTo: '{{from}} -> {{to}}',
+      orderNumber: 'Anfrage {{id}}',
+      repeatOrder: 'Wiederholen',
+      cityInactive: 'Der Tausch ist in dieser Stadt voruebergehend nicht verfuegbar',
+      cityRequired: 'Waehlen Sie eine Stadt fuer den Tausch',
+      cityCashReserveError: 'In der ausgewaehlten Stadt ist derzeit nicht genug EUR-Bargeld verfuegbar',
+      usdtReserveError: 'Die USDT-Reserve ist voruebergehend ausgeschoepft. Bitte versuchen Sie es spaeter erneut',
+      assetCrypto: 'Krypto',
+      assetCash: 'Bargeld',
+      infoCash: '4 % Gebühr · In 30 Minuten erhalten Sie den Ort der Bargeldausgabe',
+      infoUsdt: '4 % Gebühr · In 30 Minuten treffen Sie sich und erhalten EUR in bar',
+      cityTitle: 'Treffpunkt',
+      limitError: 'Das Tauschlimit beträgt 500 EUR, für größere Beträge erstellen Sie bitte eine separate Anfrage',
+      amountError: 'Der EUR-Betrag muss ein Vielfaches von 10 sein (ohne Cent).',
+      ctaCash: 'ZUR BESTÄTIGUNG',
+      ctaUsdt: 'TAUSCH BESTÄTIGEN',
+    },
+    checkout: {
+      title: 'Bestätigung',
+      detailsTitle: 'Transaktionsdetails',
+      city: 'Stadt',
+      youGive: 'Sie geben',
+      youGet: 'Sie erhalten',
+      fixedRate: 'Fixierter Kurs',
+      quickExchangeBadge: 'Schnelltausch',
+      repeatSource: 'Wiederholung der Anfrage {{id}}',
+      reserveError: 'Nicht genug Liquiditaet fuer diese Anfrage. Bitte pruefen Sie Reserven und Betrag.',
+      networkLabel: 'USDT-Transfernetzwerk',
+      walletLabel: 'Wallet-Adresse ({{network}})',
+      walletPlaceholder: 'T9yD14Nj9yD14N...',
+      contactLabel: 'Kontakt für Rückmeldung (Telegram)',
+      contactPlaceholder: '@username',
+      submitting: 'SENDEN...',
+      submitCash: 'USDT ERHALTEN',
+      submitUsdt: 'BARGELD ERHALTEN',
+      successTitle: 'Anfrage erstellt!',
+      successCash: 'In 30 Minuten erhalten Sie den Ort der Bargeldausgabe. Dieses Fenster schließt sich automatisch.',
+      successUsdt: 'In 30 Minuten treffen Sie sich und erhalten EUR in bar. Dieses Fenster schließt sich automatisch.',
+      unknownUser: 'Unbekannt',
+      telegramApiError: 'Telegram-API-Fehler: {{message}}',
+      telegramNetworkError: 'Netzwerkfehler beim Senden an Telegram: {{message}}',
+      telegramConfigError: 'Fehler: Bot-Schlüssel sind nicht konfiguriert (BOT_TOKEN oder CHAT_ID)',
+      networkTimes: {
+        trc20: '3 Min',
+        erc20: '10 Min',
+        ton: '1 Min',
+      },
+    },
+    admin: {
+      accessDenied: 'Zugriff verweigert',
+      title: 'Admin-Panel',
+      cashManagement: 'Kassenverwaltung',
+      reserveManagement: 'Reserveverwaltung',
+      rateManagement: 'Kursverwaltung',
+      ordersTitle: 'Anfragen',
+      ordersEmpty: 'Noch keine Anfragen',
+      ordersNotFound: 'Keine Anfragen entsprechen den ausgewaehlten Filtern',
+      clientStatsTitle: 'Kundenstatistik',
+      managerLabel: 'Manager',
+      managerPlaceholder: 'Managername',
+      managerEmpty: 'Nicht zugewiesen',
+      managerAssigned: '{{name}} zugewiesen',
+      statusLabel: 'Status',
+      searchLabel: 'Anfragesuche',
+      searchPlaceholder: 'ID, Kontakt oder Telegram',
+      cityFilterLabel: 'Stadt',
+      statusFilterLabel: 'Status',
+      directionFilterLabel: 'Richtung',
+      allStatuses: 'Alle Status',
+      allCities: 'Alle Staedte',
+      allDirections: 'Alle Richtungen',
+      filteredCount: 'Gefundene Anfragen: {{count}}',
+      usdtReserveLabel: 'USDT-Reserve',
+      rateInputLabel: 'Basiskurs EUR -> USDT',
+      rateCurrentLabel: 'Aktueller Kurs',
+      rateUpdatedLabel: 'Letzte Aktualisierung',
+      eurOnly: 'EUR Only',
+      active: 'Aktiv',
+      disabled: 'Deaktiviert',
+      save: 'Speichern',
+    },
+    common: {
+      empty: 'Leer',
+    },
+    orderStatus: {
+      accepted: 'Angenommen',
+      processing: 'In Bearbeitung',
+      ready: 'Bereit',
+      rejected: 'Abgelehnt',
+    },
+    cities: {
+      berlin: 'Berlin',
+      munich: 'München',
+      hamburg: 'Hamburg',
+      frankfurt: 'Frankfurt',
+      cologne: 'Köln',
+      dusseldorf: 'Düsseldorf',
+      stuttgart: 'Stuttgart',
+      leipzig: 'Leipzig',
+      dortmund: 'Dortmund',
+      essen: 'Essen',
+      bremen: 'Bremen',
+      hannover: 'Hannover',
+      nuremberg: 'Nürnberg',
+    },
+    telegram: {
+      newOrder: 'Neue Tauschanfrage!',
+      direction: 'Richtung:',
+      cashToUsdt: 'Bargeld EUR ➔ USDT',
+      usdtToCash: 'USDT ➔ Bargeld EUR',
+      city: 'Stadt:',
+      give: 'Geben:',
+      get: 'Erhalten:',
+      rate: 'Kurs:',
+      network: 'Netzwerk:',
+      wallet: 'Wallet:',
+      contact: 'Kundenkontakt:',
+      client: 'Telegram des Kunden:',
+    },
+    directions: {
+      giveCash: 'Bargeld EUR -> USDT',
+      giveUsdt: 'USDT -> Bargeld EUR',
+    },
+  },
+};
+
+const I18nContext = createContext<I18nContextValue | null>(null);
+
+function resolveDictionaryValue(dictionary: TranslationDictionary, path: string): string | undefined {
+  return path.split('.').reduce<string | TranslationDictionary | undefined>((acc, part) => {
+    if (!acc || typeof acc === 'string') {
+      return acc;
+    }
+
+    return acc[part];
+  }, dictionary) as string | undefined;
+}
+
+function interpolate(template: string, params?: TranslationParams): string {
+  if (!params) {
+    return template;
+  }
+
+  return Object.entries(params).reduce((result, [key, value]) => {
+    return result.split(`{{${key}}}`).join(String(value));
+  }, template);
+}
+
+function normalizeLanguage(languageCode?: string): Language {
+  if (!languageCode) {
+    return 'ru';
+  }
+
+  const shortCode = languageCode.toLowerCase().split('-')[0];
+
+  if (shortCode === 'en') return 'en';
+  if (shortCode === 'uk' || shortCode === 'ua') return 'uk';
+  if (shortCode === 'de') return 'de';
+
+  return 'ru';
+}
+
+function getStoredLanguage(): Language | null {
+  const storedValue = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+
+  if (storedValue === 'ru' || storedValue === 'en' || storedValue === 'uk' || storedValue === 'de') {
+    return storedValue;
+  }
+
+  return null;
+}
+
+function getInitialLanguage(): Language {
+  const storedLanguage = getStoredLanguage();
+
+  if (storedLanguage) {
+    return storedLanguage;
+  }
+
+  return normalizeLanguage(WebApp.initDataUnsafe?.user?.language_code);
+}
+
+export function I18nProvider({ children }: { children: ReactNode }) {
+  const [language, setLanguageState] = useState<Language>(() => getInitialLanguage());
+
+  useEffect(() => {
+    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+    document.documentElement.lang = language;
+    document.title = resolveDictionaryValue(dictionaries[language], 'app.title') ?? 'CryptoBull';
+  }, [language]);
+
+  const value = useMemo<I18nContextValue>(() => ({
+    language,
+    setLanguage: (nextLanguage) => setLanguageState(nextLanguage),
+    t: (key, params) => {
+      const translatedValue =
+        resolveDictionaryValue(dictionaries[language], key) ??
+        resolveDictionaryValue(dictionaries.ru, key) ??
+        key;
+
+      return interpolate(translatedValue, params);
+    },
+  }), [language]);
+
+  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
+}
+
+export function useI18n() {
+  const context = useContext(I18nContext);
+
+  if (!context) {
+    throw new Error('useI18n must be used within I18nProvider');
+  }
+
+  return context;
+}

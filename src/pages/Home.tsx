@@ -1,56 +1,122 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useStore } from '../store';
-import { ExchangeDirection } from '../types';
 import WebApp from '@twa-dev/sdk';
 import { useNavigate } from 'react-router-dom';
+import LanguageSwitcher from '../components/LanguageSwitcher';
+import { useI18n } from '../i18n';
+
+const CITY_FLAGS: Record<string, string> = {
+  berlin: '🇩🇪',
+  munich: '🏙️',
+  hamburg: '⚓',
+  frankfurt: '🏦',
+  cologne: '⛪',
+  dusseldorf: '🏭',
+  stuttgart: '🚗',
+  leipzig: '🎼',
+  dortmund: '⚽',
+  essen: '🏢',
+  bremen: '⛵',
+  hannover: '🌆',
+  nuremberg: '🏰',
+};
 
 export default function Home() {
   const navigate = useNavigate();
+  const { t, language } = useI18n();
   const { 
-    cities, isLoading, selectedCityId, direction, rates,
-    setCity, setDirection, giveAmount, getAmount, setGiveAmount
+    cities, selectedCityId, direction, rates, rateUpdatedAt, orders, usdtReserve,
+    setCity, setDirection, giveAmount, getAmount, setGiveAmount, applyOrderTemplate, clearCheckoutPrefill
   } = useStore();
 
   const user = WebApp.initDataUnsafe?.user;
+  const [citySearch, setCitySearch] = useState('');
+  const currentUserHandle = user?.username ? `@${user.username}` : (user?.first_name || t('checkout.unknownUser'));
   
   // Get admin IDs from environment variables (comma separated string)
   const adminIds = (import.meta.env.VITE_ADMIN_IDS || '').split(',').map(id => id.trim());
   const isAdmin = user?.id ? adminIds.includes(user.id.toString()) : false;
 
-  const getCityFlag = (name: string) => {
-    if (name.includes('Берлин')) return '🇩🇪';
-    if (name.includes('Мюнхен')) return '🏙️';
-    if (name.includes('Гамбург')) return '⚓';
-    if (name.includes('Франкфурт')) return '🏦';
-    if (name.includes('Кёльн')) return '⛪';
-    if (name.includes('Дюссельдорф')) return '🏭';
-    if (name.includes('Штутгарт')) return '🎭';
-    if (name.includes('Дубай')) return '🇦🇪';
-    if (name.includes('Москва')) return '🇷🇺';
-    if (name.includes('Лондон')) return '🇬🇧';
-    return '📍';
-  };
+  const filteredCities = useMemo(() => {
+    const query = citySearch.trim().toLowerCase();
 
-  const currentCity = cities.find(c => c.id === selectedCityId);
+    if (!query) {
+      return cities;
+    }
+
+    return cities.filter((city) => t(`cities.${city.cityKey}`).toLowerCase().includes(query));
+  }, [cities, citySearch, t]);
+
+  const activeOrders = useMemo(
+    () => orders.filter((order) => order.status === 'accepted' || order.status === 'processing'),
+    [orders],
+  );
+  const currentUserOrders = useMemo(
+    () => orders.filter((order) => order.userHandle === currentUserHandle),
+    [currentUserHandle, orders],
+  );
+  const currentUserStats = useMemo(() => {
+    if (currentUserOrders.length === 0) {
+      return null;
+    }
+
+    const firstOrder = [...currentUserOrders].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    )[0];
+    const volumeEUR = currentUserOrders.reduce((sum, order) => {
+      const eurAmount = order.giveCurrency === 'EUR' ? Number(order.giveAmount) : Number(order.getAmount);
+      return sum + eurAmount;
+    }, 0);
+
+    return {
+      deals: currentUserOrders.length,
+      volumeEUR,
+      firstOrderAt: firstOrder.createdAt,
+    };
+  }, [currentUserOrders]);
+
+  const estimatedQueueMinutes = activeOrders.length > 0 ? Math.max(5, Math.round(activeOrders.length * 7.5)) : 0;
+  const recentOrders = orders.slice(0, 3);
+  const latestOrder = orders[0] ?? null;
+  const currentCity = cities.find((city) => city.id === selectedCityId) ?? null;
+
   const eurAmount = direction === 'GIVE_CASH' ? Number(giveAmount) : Number(getAmount);
+  const usdtAmount = direction === 'GIVE_CASH' ? Number(getAmount) : Number(giveAmount);
   
   // Strict 500 EUR limit logic
   const isOverLimit = eurAmount > 500;
+  const isCityMissing = !currentCity;
+  const isCityInactive = currentCity ? !currentCity.isActive : false;
+  const isCashReserveInsufficient = direction === 'GIVE_USDT' ? (currentCity ? eurAmount > currentCity.limitEUR : false) : false;
+  const isUsdtReserveInsufficient = direction === 'GIVE_CASH' ? usdtAmount > usdtReserve : false;
   
   // EUR is now automatically rounded to nearest 10 in the store when getting cash,
   // but if user manually inputs EUR to give, we should warn them.
   const isEurInvalid = direction === 'GIVE_CASH' && (eurAmount % 10 !== 0 || eurAmount % 1 !== 0);
-  const isValid = Number(giveAmount) > 0 && !isOverLimit && (!isEurInvalid || eurAmount === 0);
+  const isReserveBlocked = isCityMissing || isCityInactive || isCashReserveInsufficient || isUsdtReserveInsufficient;
+  const isValid = Number(giveAmount) > 0 && !isOverLimit && !isReserveBlocked && (!isEurInvalid || eurAmount === 0);
+  const reserveMessage =
+    isCityMissing
+      ? t('home.cityRequired')
+      : isCityInactive
+        ? t('home.cityInactive')
+        : isUsdtReserveInsufficient
+          ? t('home.usdtReserveError')
+          : isCashReserveInsufficient
+            ? t('home.cityCashReserveError')
+            : null;
 
   const currentRate = rates.EUR_USDT;
-  const effectiveRate = direction === 'GIVE_CASH' 
-    ? (currentRate * 0.96) // 4% commission for us
-    : (currentRate * 1.02); // 2% bonus for client
+  const formattedRateUpdatedAt = new Date(rateUpdatedAt).toLocaleTimeString(language, {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 
   const handleNext = () => {
     if (isValid) {
       WebApp.HapticFeedback.impactOccurred('medium');
+      clearCheckoutPrefill();
       navigate('/checkout');
     }
   };
@@ -58,6 +124,12 @@ export default function Home() {
   const setAmount = (val: number) => {
     WebApp.HapticFeedback.selectionChanged();
     setGiveAmount(val.toString());
+  };
+
+  const handleRepeatOrder = (orderId: string) => {
+    WebApp.HapticFeedback.impactOccurred('medium');
+    applyOrderTemplate(orderId);
+    navigate('/checkout');
   };
 
   return (
@@ -85,17 +157,18 @@ export default function Home() {
           </div>
           <div>
             <div className="text-[17px] font-[800] tracking-[0.06em] text-text ">CryptoBull</div>
-            <div className="text-[10px] font-[500] text-muted tracking-[0.1em] mt-[1px]">P2P Exchange</div>
+            <div className="text-[10px] font-[500] text-muted tracking-[0.1em] mt-[1px]">{t('app.subtitle')}</div>
           </div>
         </div>
         <div className="flex items-center gap-[10px]">
+          <LanguageSwitcher />
           <div className="flex items-center gap-[5px] bg-green2 border border-green3 rounded-[20px] px-[10px] py-[5px] text-[10px] font-[600] text-green tracking-[0.06em]">
             <div className="w-[5px] h-[5px] rounded-full bg-green animate-pulse-fast"></div>
-            LIVE
+            {t('app.live')}
           </div>
           <div className="w-[34px] h-[34px] rounded-full bg-bg3 border border-border2 flex items-center justify-center text-[13px] font-[700] text-muted overflow-hidden">
              {user?.photo_url ? (
-              <img src={user.photo_url} alt="Avatar" className="w-full h-full object-cover" />
+              <img src={user.photo_url} alt={t('app.avatarAlt')} className="w-full h-full object-cover" />
             ) : (
               user?.first_name?.charAt(0) || 'U'
             )}
@@ -104,7 +177,7 @@ export default function Home() {
       </header>
 
       {/* Mode Selection */}
-      <div className="relative z-10 text-[10px] font-[600] tracking-[0.14em] uppercase text-muted px-[20px] pt-[18px] pb-[10px]">Что хотите сделать?</div>
+      <div className="relative z-10 text-[10px] font-[600] tracking-[0.14em] uppercase text-muted px-[20px] pt-[18px] pb-[10px]">{t('home.actionTitle')}</div>
       <div className="relative z-10 px-[16px] pt-[16px] pb-0">
         <div className="grid grid-cols-2 gap-[8px]">
           
@@ -128,8 +201,8 @@ export default function Home() {
               </svg>
             </div>
             
-            <div className={`text-[14px] font-[700] mb-[2px] ${direction === 'GIVE_CASH' ? 'text-amber' : 'text-text'}`}>Отдаю наличные</div>
-            <div className="text-[11px] text-muted font-[500]">Получаю USDT</div>
+            <div className={`text-[14px] font-[700] mb-[2px] ${direction === 'GIVE_CASH' ? 'text-amber' : 'text-text'}`}>{t('home.giveCashTitle')}</div>
+            <div className="text-[11px] text-muted font-[500]">{t('home.giveCashSubtitle')}</div>
           </div>
 
           <div 
@@ -153,8 +226,8 @@ export default function Home() {
               </svg>
             </div>
             
-            <div className={`text-[14px] font-[700] mb-[2px] ${direction === 'GIVE_USDT' ? 'text-usdt' : 'text-text'}`}>Отдаю USDT</div>
-            <div className="text-[11px] text-muted font-[500]">Получаю наличные</div>
+            <div className={`text-[14px] font-[700] mb-[2px] ${direction === 'GIVE_USDT' ? 'text-usdt' : 'text-text'}`}>{t('home.giveUsdtTitle')}</div>
+            <div className="text-[11px] text-muted font-[500]">{t('home.giveUsdtSubtitle')}</div>
           </div>
 
         </div>
@@ -170,15 +243,40 @@ export default function Home() {
             </svg>
           </div>
           <div>
-            <div className="text-[11px] text-muted font-[500]">Курс USDT / EUR</div>
-            <div className="font-mono text-[14px] font-[600] text-text mt-[1px]">1 USDT = {(1 / currentRate).toFixed(4)} €</div>
+            <div className="text-[11px] text-muted font-[500]">{t('home.rateLabel')}</div>
+            <div className="font-mono text-[14px] font-[600] text-text mt-[1px]">1 EUR = {currentRate.toFixed(4)} USDT</div>
+            <div className="mt-[4px] text-[10px] font-[500] text-dim">{t('home.rateUpdated', { time: formattedRateUpdatedAt })}</div>
           </div>
         </div>
-        <div className="font-mono text-[11px] font-[500] text-green">▲ +0.12%</div>
+        <div className="font-mono text-[11px] font-[500] text-green">LIVE</div>
+      </div>
+
+      <div className="relative z-10 mx-[16px] mt-[12px] rounded-r2 border border-border2 bg-bg2 p-[16px]">
+        <div className="mb-[10px] text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.clientCardTitle')}</div>
+        {currentUserStats ? (
+          <div className="grid grid-cols-3 gap-[8px]">
+            <div className="rounded-r border border-border bg-bg3 p-[12px]">
+              <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-muted">{t('home.clientDeals')}</div>
+              <div className="mt-[6px] font-mono text-[18px] font-[700] text-text">{currentUserStats.deals}</div>
+            </div>
+            <div className="rounded-r border border-border bg-bg3 p-[12px]">
+              <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-muted">{t('home.clientVolume')}</div>
+              <div className="mt-[6px] font-mono text-[18px] font-[700] text-text">{currentUserStats.volumeEUR.toFixed(0)}€</div>
+            </div>
+            <div className="rounded-r border border-border bg-bg3 p-[12px]">
+              <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-muted">{t('home.clientSince')}</div>
+              <div className="mt-[6px] text-[12px] font-[700] text-text">
+                {new Date(currentUserStats.firstOrderAt).toLocaleDateString(language, { month: 'short', year: 'numeric' })}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="text-[13px] font-[500] text-muted">{t('home.clientCardEmpty')}</div>
+        )}
       </div>
 
       {/* Amount Input */}
-      <div className="relative z-10 text-[10px] font-[600] tracking-[0.14em] uppercase text-muted px-[20px] pt-[18px] pb-[10px]">Сумма</div>
+      <div className="relative z-10 text-[10px] font-[600] tracking-[0.14em] uppercase text-muted px-[20px] pt-[18px] pb-[10px]">{t('home.amountTitle')}</div>
       <div className="relative z-10 mx-[16px]">
         <div className="bg-bg2 border-[1.5px] border-border2 rounded-r2 p-[18px_18px_14px] transition-colors focus-within:border-green">
           <div className="flex items-center justify-between mb-[14px]">
@@ -197,7 +295,7 @@ export default function Home() {
               )}
               <span>{direction === 'GIVE_CASH' ? 'EUR' : 'USDT'}</span>
             </div>
-            <div className="text-[11px] text-muted font-[500] tracking-[0.04em]">Вы отдаёте</div>
+            <div className="text-[11px] text-muted font-[500] tracking-[0.04em]">{t('home.youGive')}</div>
           </div>
           
           <div className="flex items-baseline gap-[6px]">
@@ -244,46 +342,166 @@ export default function Home() {
             <span>{direction === 'GIVE_CASH' ? 'USDT' : 'EUR'}</span>
           </div>
           <div className={`text-[10px] font-[600] tracking-[0.08em] uppercase p-[3px_8px] rounded-[6px] ${direction === 'GIVE_CASH' ? 'bg-[rgba(38,161,123,0.1)] text-usdt' : 'bg-[rgba(245,166,35,0.1)] text-amber'}`}>
-            {direction === 'GIVE_CASH' ? 'Криптовалюта' : 'Наличные'}
+            {direction === 'GIVE_CASH' ? t('home.assetCrypto') : t('home.assetCash')}
           </div>
         </div>
         <div className="font-mono text-[28px] font-[600] mt-[4px]" style={{ color: getAmount ? 'var(--text)' : 'var(--muted)' }}>
           {getAmount || '—'}
         </div>
         <div className="text-[11px] text-muted mt-[8px] pt-[8px] border-t border-border font-[500] leading-relaxed">
-          Комиссия {direction === 'GIVE_CASH' ? '4%' : 'доплата 2%'} · {direction === 'GIVE_CASH' ? 'Через 30 минут вы получите место выдачи наличных' : 'Через 30 минут встреча, получение криптовалюты на счет'}
+          {direction === 'GIVE_CASH' ? t('home.infoCash') : t('home.infoUsdt')}
+        </div>
+      </div>
+
+      <div className="relative z-10 mx-[16px] mt-[12px] rounded-r2 border border-border2 bg-bg2 p-[16px]">
+        <div className="mb-[12px] text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.quickExchangeTitle')}</div>
+        {latestOrder ? (
+          <div className="rounded-r border border-border bg-bg3 p-[14px]">
+            <div className="mb-[6px] flex items-center justify-between gap-[10px]">
+              <div className="text-[13px] font-[700] text-text">{t('home.repeatLastDeal')}</div>
+              <div className="rounded-[6px] bg-[rgba(0,208,132,0.1)] px-[8px] py-[4px] text-[10px] font-[700] uppercase tracking-[0.06em] text-green">
+                {t(`orderStatus.${latestOrder.status}`)}
+              </div>
+            </div>
+            <div className="text-[12px] font-[500] text-muted">
+              {t(`cities.${latestOrder.cityKey}`)} · {latestOrder.giveAmount} {latestOrder.giveCurrency} {'->'} {latestOrder.getAmount} {latestOrder.getCurrency}
+            </div>
+            <div className="mt-[6px] text-[11px] font-[500] text-dim">
+              {latestOrder.managerName
+                ? t('admin.managerAssigned', { name: latestOrder.managerName })
+                : t('admin.managerEmpty')}
+            </div>
+            <button
+              type="button"
+              onClick={() => handleRepeatOrder(latestOrder.id)}
+              className="mt-[12px] w-full rounded-r border border-green3 bg-green2 px-[14px] py-[12px] text-[13px] font-[700] uppercase tracking-[0.04em] text-green transition-colors hover:border-green"
+            >
+              {t('home.quickExchangeAction')}
+            </button>
+          </div>
+        ) : (
+          <div className="text-[13px] font-[500] text-muted">{t('home.quickExchangeEmpty')}</div>
+        )}
+      </div>
+
+      <div className="relative z-10 mx-[16px] mt-[12px] rounded-r2 border border-border2 bg-bg2 p-[16px]">
+        <div className="mb-[6px] text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.queueTitle')}</div>
+        {activeOrders.length > 0 ? (
+          <>
+            <div className="text-[16px] font-[700] text-text">{t('home.queueActive', { count: activeOrders.length })}</div>
+            <div className="mt-[6px] text-[12px] font-[500] text-muted">{t('home.queueEta', { minutes: estimatedQueueMinutes })}</div>
+          </>
+        ) : (
+          <div className="text-[13px] font-[500] text-muted">{t('home.queueEmpty')}</div>
+        )}
+      </div>
+
+      <div className="relative z-10 mx-[16px] mt-[12px] rounded-r2 border border-border2 bg-bg2 p-[16px]">
+        <div className="mb-[10px] text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.reserveTitle')}</div>
+        <div className="grid grid-cols-2 gap-[8px]">
+          <div className="rounded-r border border-border bg-bg3 p-[12px]">
+            <div className="text-[11px] font-[600] uppercase tracking-[0.06em] text-muted">{t('home.reserveUsdt')}</div>
+            <div className="mt-[6px] font-mono text-[20px] font-[700] text-text">{usdtReserve.toFixed(2)}</div>
+          </div>
+          <div className="rounded-r border border-border bg-bg3 p-[12px]">
+            <div className="text-[11px] font-[600] uppercase tracking-[0.06em] text-muted">{t('home.reserveCash')}</div>
+            <div className="mt-[6px] font-mono text-[20px] font-[700] text-text">
+              {currentCity ? currentCity.limitEUR : '—'}
+            </div>
+          </div>
         </div>
       </div>
 
       {/* City Selection */}
-      <div className="relative z-10 text-[10px] font-[600] tracking-[0.14em] uppercase text-muted px-[20px] pt-[18px] pb-[10px]">Город встречи</div>
+      <div className="relative z-10 text-[10px] font-[600] tracking-[0.14em] uppercase text-muted px-[20px] pt-[18px] pb-[10px]">{t('home.cityTitle')}</div>
       <div className="relative z-10 px-[16px]">
-        <div className="grid grid-cols-2 gap-[8px]">
-          {cities.map(city => (
-            <button
-              key={city.id}
-              onClick={() => { WebApp.HapticFeedback.selectionChanged(); setCity(city.id); }}
-              className={`bg-bg2 border-[1.5px] rounded-r p-[13px_12px] cursor-pointer flex items-center gap-[9px] transition-all hover:border-border2 ${selectedCityId === city.id ? 'border-green bg-[rgba(0,208,132,0.05)]' : 'border-border'}`}
-            >
-              <div className={`w-[28px] h-[28px] rounded-[8px] bg-bg3 border flex items-center justify-center text-[14px] shrink-0 ${selectedCityId === city.id ? 'border-[rgba(0,208,132,0.3)]' : 'border-border'}`}>
-                {getCityFlag(city.name)}
-              </div>
-              <div className={`text-[13px] font-[600] transition-colors ${selectedCityId === city.id ? 'text-text' : 'text-muted'}`}>
-                {city.name}
-              </div>
-            </button>
-          ))}
+        <div className="mb-[12px] rounded-r2 border border-border2 bg-bg2 p-[14px]">
+          <div className="mb-[10px] flex items-center justify-between gap-[10px]">
+            <div className="text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.searchLabel')}</div>
+            <div className="text-[11px] font-[500] text-muted">{t('home.cityCount', { count: filteredCities.length })}</div>
+          </div>
+          <input
+            type="text"
+            value={citySearch}
+            onChange={(e) => setCitySearch(e.target.value)}
+            placeholder={t('home.searchPlaceholder')}
+            className="w-full rounded-r border border-border bg-bg3 px-[14px] py-[12px] text-[14px] text-text outline-none transition-colors placeholder:text-dim focus:border-green"
+          />
         </div>
+
+        {filteredCities.length > 0 ? (
+          <div className="grid grid-cols-2 gap-[8px]">
+            {filteredCities.map(city => (
+              <button
+                key={city.id}
+                onClick={() => { WebApp.HapticFeedback.selectionChanged(); setCity(city.id); }}
+                className={`bg-bg2 border-[1.5px] rounded-r p-[13px_12px] cursor-pointer flex items-center gap-[9px] transition-all hover:border-border2 ${selectedCityId === city.id ? 'border-green bg-[rgba(0,208,132,0.05)]' : 'border-border'}`}
+              >
+                <div className={`w-[28px] h-[28px] rounded-[8px] bg-bg3 border flex items-center justify-center text-[14px] shrink-0 ${selectedCityId === city.id ? 'border-[rgba(0,208,132,0.3)]' : 'border-border'}`}>
+                  {CITY_FLAGS[city.cityKey] ?? '📍'}
+                </div>
+                <div className={`text-[13px] font-[600] transition-colors ${selectedCityId === city.id ? 'text-text' : 'text-muted'}`}>
+                  {t(`cities.${city.cityKey}`)}
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-r2 border border-border2 bg-bg2 px-[16px] py-[18px] text-center text-[13px] font-[500] text-muted">
+            {t('home.noCitiesFound')}
+          </div>
+        )}
       </div>
 
       {/* Error messages inline */}
-      {Number(giveAmount) > 0 && (isOverLimit || isEurInvalid) && (
+      {Number(giveAmount) > 0 && (isOverLimit || isEurInvalid || !!reserveMessage) && (
         <div className="px-[16px] mt-[16px]">
           <div className="bg-[rgba(248,113,113,0.1)] border border-[rgba(248,113,113,0.2)] rounded-r p-3 text-[12px] text-error">
-            {isOverLimit ? 'Лимит обмена 500 EUR, для большей суммы создайте отдельную заявку' : 'Сумма в EUR должна быть кратна 10 (без копеек).'}
+            {isOverLimit ? t('home.limitError') : reserveMessage ?? t('home.amountError')}
           </div>
         </div>
       )}
+
+      <div className="relative z-10 mx-[16px] mt-[16px] rounded-r2 border border-border2 bg-bg2 p-[16px]">
+        <div className="mb-[12px] text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.historyTitle')}</div>
+        {recentOrders.length > 0 ? (
+          <div className="space-y-[10px]">
+            {recentOrders.map((order) => (
+              <div key={order.id} className="rounded-r border border-border bg-bg3 p-[12px]">
+                <div className="mb-[6px] flex items-center justify-between gap-[8px]">
+                  <div className="text-[12px] font-[700] text-text">{t('home.orderNumber', { id: order.id })}</div>
+                  <div className="rounded-[6px] bg-[rgba(0,208,132,0.1)] px-[8px] py-[4px] text-[10px] font-[700] uppercase tracking-[0.06em] text-green">
+                    {t(`orderStatus.${order.status}`)}
+                  </div>
+                </div>
+                <div className="text-[13px] font-[600] text-text">
+                  {t('home.orderFromTo', { from: order.giveCurrency, to: order.getCurrency })}
+                </div>
+                <div className="mt-[4px] text-[12px] font-[500] text-muted">
+                  {t(`cities.${order.cityKey}`)} · {order.giveAmount} {order.giveCurrency} {'->'} {order.getAmount} {order.getCurrency}
+                </div>
+                <div className="mt-[4px] text-[11px] font-[500] text-dim">
+                  {order.managerName
+                    ? t('admin.managerAssigned', { name: order.managerName })
+                    : t('admin.managerEmpty')}
+                </div>
+                <div className="mt-[4px] text-[11px] font-[500] text-dim">
+                  {new Date(order.createdAt).toLocaleString()}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleRepeatOrder(order.id)}
+                  className="mt-[10px] rounded-r border border-border2 bg-bg2 px-[12px] py-[10px] text-[11px] font-[700] uppercase tracking-[0.05em] text-text transition-colors hover:border-green hover:text-green"
+                >
+                  {t('home.repeatOrder')}
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-[13px] font-[500] text-muted">{t('home.historyEmpty')}</div>
+        )}
+      </div>
 
       {/* CTA Button */}
       <div className="relative z-10 p-[16px_16px_0] mt-4">
@@ -298,7 +516,7 @@ export default function Home() {
               : 'bg-bg3 text-muted'
             }`}
         >
-          {direction === 'GIVE_CASH' ? 'ПЕРЕЙТИ К ОФОРМЛЕНИЮ' : 'ПОДТВЕРДИТЬ ОБМЕН'}
+          {direction === 'GIVE_CASH' ? t('home.ctaCash') : t('home.ctaUsdt')}
         </button>
       </div>
 
