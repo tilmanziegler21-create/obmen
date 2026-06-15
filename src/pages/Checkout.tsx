@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useStore } from '../store';
@@ -6,14 +6,17 @@ import { CheckCircle2 } from 'lucide-react';
 import WebApp from '@twa-dev/sdk';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useI18n } from '../i18n';
+import { calculateCustomerMetrics, getClientRate, getCustomerBenefits } from '../lib/customer';
 
 export default function Checkout() {
   const navigate = useNavigate();
   const { t } = useI18n();
   const defaultContact = WebApp.initDataUnsafe?.user?.username ? `@${WebApp.initDataUnsafe.user.username}` : '';
+  const telegramInitData = WebApp.initData || '';
+  const telegramUserId = WebApp.initDataUnsafe?.user?.id ?? null;
   const { 
-    cities, selectedCityId, direction, rates, usdtReserve, antiPhishingCode, checkoutPrefill,
-    giveAmount, getAmount, createOrder, clearCheckoutPrefill
+    cities, selectedCityId, direction, rates, usdtReserve, antiPhishingCode, checkoutPrefill, orders, profileSettings,
+    giveAmount, getAmount, createOrder, clearCheckoutPrefill, setCommissionPercent
   } = useStore();
   const NETWORKS = [
     { id: 'TRC-20', label: 'TRC-20', time: t('checkout.networkTimes.trc20') },
@@ -30,6 +33,9 @@ export default function Checkout() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
+  const userHandle = WebApp.initDataUnsafe?.user?.username 
+    ? `@${WebApp.initDataUnsafe.user.username}` 
+    : (WebApp.initDataUnsafe?.user?.first_name || t('checkout.unknownUser'));
 
   const city = cities.find(c => c.id === selectedCityId);
   const cityName = city ? t(`cities.${city.cityKey}`) : '-';
@@ -41,6 +47,14 @@ export default function Checkout() {
     !city.isActive ||
     (direction === 'GIVE_USDT' && requiredCashReserve > city.limitEUR) ||
     (direction === 'GIVE_CASH' && requiredUsdtReserve > usdtReserve);
+  const metrics = useMemo(
+    () => calculateCustomerMetrics(orders, userHandle),
+    [orders, userHandle],
+  );
+  const benefits = useMemo(
+    () => getCustomerBenefits(metrics, profileSettings.activatedReferralCode),
+    [metrics, profileSettings.activatedReferralCode],
+  );
 
   const handleBack = () => {
     WebApp.HapticFeedback.impactOccurred('light');
@@ -57,81 +71,57 @@ export default function Checkout() {
     setIsSubmitting(true);
     setSubmitError(null);
     
-    // Формируем данные заявки
-    const orderData = {
-      action: 'new_order',
-      direction: direction === 'GIVE_CASH' ? 'CASH_TO_USDT' : 'USDT_TO_CASH',
-      city: cityName,
-      giveAmount,
-      giveCurrency: direction === 'GIVE_CASH' ? 'EUR' : 'USDT',
-      getAmount,
-      getCurrency: direction === 'GIVE_CASH' ? 'USDT' : 'EUR',
-      rate: effectiveRate.toFixed(4),
-      network: isGettingUSDT ? network : null,
-      wallet: isGettingUSDT ? wallet : null,
-      contact: !isGettingUSDT ? contact : null,
-    };
-
-    const BOT_TOKEN = import.meta.env.VITE_BOT_TOKEN;
-    const CHAT_ID = import.meta.env.VITE_CHAT_ID;
-    const userHandle = WebApp.initDataUnsafe?.user?.username 
-      ? `@${WebApp.initDataUnsafe.user.username}` 
-      : (WebApp.initDataUnsafe?.user?.first_name || t('checkout.unknownUser'));
-
     let isSentSuccessfully = false;
 
-    if (BOT_TOKEN && CHAT_ID) {
-      try {
-        const message = `
-🚨 <b>${t('telegram.newOrder')}</b>
+    try {
+      const response = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          telegramInitData,
+          order: {
+            direction,
+            city: cityName,
+            cityKey: city?.cityKey ?? 'berlin',
+            giveAmount,
+            giveCurrency: direction === 'GIVE_CASH' ? 'EUR' : 'USDT',
+            getAmount,
+            getCurrency: direction === 'GIVE_CASH' ? 'USDT' : 'EUR',
+            rate: effectiveRate.toFixed(4),
+            network: isGettingUSDT ? network : null,
+            wallet: isGettingUSDT ? wallet : null,
+            contact: !isGettingUSDT ? contact : null,
+            userHandle,
+            userId: telegramUserId,
+            antiPhishingCode,
+            commissionPercent: benefits.effectiveCommissionPercent,
+            discountPercent: benefits.totalDiscountPercent,
+            referralCodeUsed: benefits.hasReferralActivated ? profileSettings.activatedReferralCode : null,
+            managerName: null,
+          },
+        }),
+      });
 
-🔄 <b>${t('telegram.direction')}</b> ${orderData.direction === 'CASH_TO_USDT' ? t('telegram.cashToUsdt') : t('telegram.usdtToCash')}
-🏙 <b>${t('telegram.city')}</b> ${orderData.city}
-💰 <b>${t('telegram.give')}</b> ${orderData.giveAmount} ${orderData.giveCurrency}
-💸 <b>${t('telegram.get')}</b> ${orderData.getAmount} ${orderData.getCurrency}
-📊 <b>${t('telegram.rate')}</b> 1 EUR = ${orderData.rate} USDT
+      const responseData = await response.json().catch(() => null);
 
-${isGettingUSDT 
-  ? `🔗 <b>${t('telegram.network')}</b> ${orderData.network}\n💼 <b>${t('telegram.wallet')}</b> <code>${orderData.wallet}</code>` 
-  : `📱 <b>${t('telegram.contact')}</b> ${orderData.contact}`}
-
-🛡 <b>${t('telegram.securityCode')}</b> <code>${antiPhishingCode}</code>
-
-👤 <b>${t('telegram.client')}</b> ${userHandle}
-        `;
-
-        const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: CHAT_ID,
-            text: message,
-            parse_mode: 'HTML',
-          }),
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          console.error('Telegram API Error Response:', errorData);
-          setSubmitError(t('checkout.telegramApiError', { message: errorData.description }));
-          setIsSubmitting(false);
-          return;
-        }
-        
-        isSentSuccessfully = true;
-      } catch (e) {
-        console.error('Ошибка при отправке в Telegram:', e);
-        setSubmitError(
-          t('checkout.telegramNetworkError', {
-            message: e instanceof Error ? e.message : t('checkout.unknownUser'),
-          }),
-        );
+      if (!response.ok) {
+        const message =
+          responseData && typeof responseData.error === 'string'
+            ? responseData.error
+            : t('checkout.unknownUser');
+        setSubmitError(t('checkout.telegramApiError', { message }));
         setIsSubmitting(false);
         return;
       }
-    } else {
-      console.warn('Telegram BOT_TOKEN or CHAT_ID is not set in environment variables');
-      setSubmitError(t('checkout.telegramConfigError'));
+
+      isSentSuccessfully = true;
+    } catch (e) {
+      console.error('Ошибка при отправке в backend:', e);
+      setSubmitError(
+        t('checkout.telegramNetworkError', {
+          message: e instanceof Error ? e.message : t('checkout.unknownUser'),
+        }),
+      );
       setIsSubmitting(false);
       return;
     }
@@ -152,6 +142,9 @@ ${isGettingUSDT
         userHandle,
         managerName: null,
         antiPhishingCode,
+        commissionPercent: benefits.effectiveCommissionPercent,
+        discountPercent: benefits.totalDiscountPercent,
+        referralCodeUsed: benefits.hasReferralActivated ? profileSettings.activatedReferralCode : null,
       });
 
       setTimeout(() => {
@@ -175,9 +168,11 @@ ${isGettingUSDT
     : contact.length > 2;
 
   const currentRate = rates.EUR_USDT;
-  const effectiveRate = direction === 'GIVE_CASH' 
-    ? (currentRate * 0.96)
-    : (currentRate * 0.96);
+  const effectiveRate = getClientRate(direction, currentRate, benefits.effectiveCommissionPercent);
+
+  useEffect(() => {
+    setCommissionPercent(benefits.effectiveCommissionPercent);
+  }, [benefits.effectiveCommissionPercent, setCommissionPercent]);
 
   if (isSuccess) {
     return (
@@ -268,6 +263,14 @@ ${isGettingUSDT
           <div className="flex items-center justify-between gap-[12px] border-t border-border pt-[16px] text-[12px]">
             <span className="text-muted font-[500]">{t('checkout.fixedRate')}</span>
             <span className="text-right font-mono font-[600] text-text">1 EUR = {effectiveRate.toFixed(4)} USDT</span>
+          </div>
+          <div className="flex items-center justify-between gap-[12px] text-[12px]">
+            <span className="text-muted font-[500]">{t('checkout.personalCommission')}</span>
+            <span className="text-right font-mono font-[600] text-text">{benefits.effectiveCommissionPercent.toFixed(1)}%</span>
+          </div>
+          <div className="flex items-center justify-between gap-[12px] text-[12px]">
+            <span className="text-muted font-[500]">{t('checkout.yourBenefit')}</span>
+            <span className="text-right font-mono font-[600] text-green">{benefits.totalDiscountPercent.toFixed(1)}%</span>
           </div>
         </div>
 

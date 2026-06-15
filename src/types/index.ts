@@ -1,5 +1,6 @@
 export type Currency = 'EUR' | 'USDT';
 export type OrderStatus = 'accepted' | 'processing' | 'ready' | 'rejected';
+export type LoyaltyTier = 'standard' | 'gold' | 'vip' | 'provider';
 
 export interface City {
   id: string;
@@ -31,6 +32,9 @@ export interface ExchangeOrder {
   userHandle: string;
   managerName: string | null;
   antiPhishingCode: string | null;
+  commissionPercent: number;
+  discountPercent: number;
+  referralCodeUsed: string | null;
   status: OrderStatus;
 }
 
@@ -41,6 +45,24 @@ export interface CheckoutPrefill {
   network: string;
 }
 
+export interface ProfileSettings {
+  displayName: string;
+  roleLabel: string;
+  bio: string;
+  managerContact: string;
+  referralCode: string;
+  activatedReferralCode: string;
+}
+
+export interface Review {
+  id: string;
+  userHandle: string;
+  cityKey: string;
+  rating: number;
+  text: string;
+  createdAt: string;
+}
+
 export interface ExchangeState {
   cities: City[];
   rates: Rates;
@@ -48,6 +70,9 @@ export interface ExchangeState {
   orders: ExchangeOrder[];
   usdtReserve: number;
   antiPhishingCode: string;
+  profileSettings: ProfileSettings;
+  reviews: Review[];
+  commissionPercent: number;
   checkoutPrefill: CheckoutPrefill;
   isLoading: boolean;
   
@@ -64,6 +89,10 @@ export interface ExchangeState {
   updateUsdtReserve: (amount: number) => void;
   updateRate: (rate: number) => void;
   updateAntiPhishingCode: (code: string) => void;
+  updateProfileSettings: (settings: Partial<ProfileSettings>) => void;
+  setCommissionPercent: (value: number) => void;
+  addReview: (review: Omit<Review, 'id' | 'createdAt'>) => void;
+  removeReview: (id: string) => void;
   toggleCityActive: (id: string) => void;
   setCity: (id: string) => void;
   setDirection: (dir: ExchangeDirection) => void;

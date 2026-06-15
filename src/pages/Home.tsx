@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useStore } from '../store';
 import WebApp from '@twa-dev/sdk';
 import { useNavigate } from 'react-router-dom';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useI18n } from '../i18n';
+import { calculateCustomerMetrics, generateReferralCode, getCustomerBenefits, getLoyaltyTier } from '../lib/customer';
 
 const CITY_FLAGS: Record<string, string> = {
   berlin: '🇩🇪',
@@ -26,12 +27,13 @@ export default function Home() {
   const navigate = useNavigate();
   const { t, language } = useI18n();
   const { 
-    cities, selectedCityId, direction, rates, rateUpdatedAt, orders, usdtReserve, antiPhishingCode,
-    setCity, setDirection, giveAmount, getAmount, setGiveAmount, applyOrderTemplate, clearCheckoutPrefill
+    cities, selectedCityId, direction, rates, rateUpdatedAt, orders, usdtReserve, antiPhishingCode, profileSettings, reviews,
+    setCity, setDirection, giveAmount, getAmount, setGiveAmount, applyOrderTemplate, clearCheckoutPrefill, updateProfileSettings, setCommissionPercent
   } = useStore();
 
   const user = WebApp.initDataUnsafe?.user;
   const [citySearch, setCitySearch] = useState('');
+  const [referralInput, setReferralInput] = useState(profileSettings.activatedReferralCode);
   const currentUserHandle = user?.username ? `@${user.username}` : (user?.first_name || t('checkout.unknownUser'));
   
   // Get admin IDs from environment variables (comma separated string)
@@ -56,25 +58,48 @@ export default function Home() {
     () => orders.filter((order) => order.userHandle === currentUserHandle),
     [currentUserHandle, orders],
   );
-  const currentUserStats = useMemo(() => {
-    if (currentUserOrders.length === 0) {
-      return null;
+  const metrics = useMemo(
+    () => calculateCustomerMetrics(orders, currentUserHandle),
+    [currentUserHandle, orders],
+  );
+  const benefits = useMemo(
+    () => getCustomerBenefits(metrics, profileSettings.activatedReferralCode),
+    [metrics, profileSettings.activatedReferralCode],
+  );
+  const currentUserStats = useMemo(
+    () =>
+      metrics.deals > 0
+        ? {
+            deals: metrics.deals,
+            volumeEUR: metrics.volumeEUR,
+            firstOrderAt: metrics.firstOrderAt as string,
+          }
+        : null,
+    [metrics],
+  );
+  const loyaltyTier = useMemo(() => getLoyaltyTier(metrics), [metrics]);
+  const assignedManagerOrder = useMemo(
+    () => currentUserOrders.find((order) => order.managerName && order.status !== 'rejected') ?? null,
+    [currentUserOrders],
+  );
+  const latestReviews = useMemo(() => reviews.slice(0, 3), [reviews]);
+  const hasActivatedReferral = profileSettings.activatedReferralCode.trim().length > 0;
+  const canActivateReferral = metrics.deals === 0 && !hasActivatedReferral;
+
+  useEffect(() => {
+    setCommissionPercent(benefits.effectiveCommissionPercent);
+  }, [benefits.effectiveCommissionPercent, setCommissionPercent]);
+
+  useEffect(() => {
+    setReferralInput(profileSettings.activatedReferralCode);
+  }, [profileSettings.activatedReferralCode]);
+
+  useEffect(() => {
+    const expectedReferralCode = generateReferralCode(currentUserHandle);
+    if (profileSettings.referralCode !== expectedReferralCode) {
+      updateProfileSettings({ referralCode: expectedReferralCode });
     }
-
-    const firstOrder = [...currentUserOrders].sort(
-      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-    )[0];
-    const volumeEUR = currentUserOrders.reduce((sum, order) => {
-      const eurAmount = order.giveCurrency === 'EUR' ? Number(order.giveAmount) : Number(order.getAmount);
-      return sum + eurAmount;
-    }, 0);
-
-    return {
-      deals: currentUserOrders.length,
-      volumeEUR,
-      firstOrderAt: firstOrder.createdAt,
-    };
-  }, [currentUserOrders]);
+  }, [currentUserHandle, profileSettings.referralCode, updateProfileSettings]);
 
   const estimatedQueueMinutes = activeOrders.length > 0 ? Math.max(5, Math.round(activeOrders.length * 7.5)) : 0;
   const recentOrders = orders.slice(0, 3);
@@ -121,6 +146,16 @@ export default function Home() {
     }
   };
 
+  const handleActivateReferral = () => {
+    const normalized = referralInput.trim().toUpperCase();
+    if (!canActivateReferral || !normalized || normalized === profileSettings.referralCode) {
+      return;
+    }
+
+    WebApp.HapticFeedback.notificationOccurred('success');
+    updateProfileSettings({ activatedReferralCode: normalized });
+  };
+
   const setAmount = (val: number) => {
     WebApp.HapticFeedback.selectionChanged();
     setGiveAmount(val.toString());
@@ -165,17 +200,17 @@ export default function Home() {
         </div>
         <div className="flex shrink-0 items-center gap-[8px]">
           <LanguageSwitcher />
-          <div className="hidden items-center gap-[5px] rounded-[20px] border border-green3 bg-green2 px-[8px] py-[5px] text-[10px] font-[600] text-green tracking-[0.04em] min-[390px]:flex">
-            <div className="w-[5px] h-[5px] rounded-full bg-green animate-pulse-fast"></div>
-            <span>{t('app.live')}</span>
-          </div>
-          <div className="w-[34px] h-[34px] rounded-full bg-bg3 border border-border2 flex items-center justify-center text-[13px] font-[700] text-muted overflow-hidden">
-             {user?.photo_url ? (
-              <img src={user.photo_url} alt={t('app.avatarAlt')} className="w-full h-full object-cover" />
+          <button
+            type="button"
+            onClick={() => navigate('/profile')}
+            className="flex h-[34px] w-[34px] items-center justify-center overflow-hidden rounded-full border border-border2 bg-bg3 text-[13px] font-[700] text-muted transition-colors hover:border-green"
+          >
+            {user?.photo_url ? (
+              <img src={user.photo_url} alt={t('app.avatarAlt')} className="h-full w-full object-cover" />
             ) : (
               user?.first_name?.charAt(0) || 'U'
             )}
-          </div>
+          </button>
         </div>
       </header>
 
@@ -238,7 +273,7 @@ export default function Home() {
 
       {/* Rate Banner */}
       <div className="relative z-10 m-[12px_16px_0] rounded-r border border-border bg-bg2 p-[12px_16px]">
-        <div className="flex flex-col gap-[10px] min-[360px]:flex-row min-[360px]:items-center min-[360px]:justify-between">
+        <div className="flex min-w-0 items-center gap-[8px]">
           <div className="flex min-w-0 items-center gap-[8px]">
           <div className="w-[28px] h-[28px] flex items-center justify-center">
             <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
@@ -252,9 +287,20 @@ export default function Home() {
             <div className="mt-[4px] text-[10px] font-[500] text-dim">{t('home.rateUpdated', { time: formattedRateUpdatedAt })}</div>
             </div>
           </div>
-          <div className="font-mono text-[11px] font-[500] text-green">LIVE</div>
         </div>
       </div>
+
+      {isAdmin && (
+        <div className="relative z-10 mx-[16px] mt-[12px]">
+          <button
+            type="button"
+            onClick={() => navigate('/admin')}
+            className="w-full rounded-r2 border border-green3 bg-green2 px-[16px] py-[14px] text-[13px] font-[700] uppercase tracking-[0.05em] text-green transition-colors hover:border-green"
+          >
+            {t('home.adminPanelAction', { count: activeOrders.length })}
+          </button>
+        </div>
+      )}
 
       <div className="relative z-10 mx-[16px] mt-[12px] rounded-r2 border border-border2 bg-bg2 p-[16px]">
         <div className="mb-[10px] text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.clientCardTitle')}</div>
@@ -280,6 +326,69 @@ export default function Home() {
         )}
       </div>
 
+      <div className="relative z-10 mx-[16px] mt-[12px] rounded-r2 border border-border2 bg-bg2 p-[16px]">
+        <div className="mb-[10px] flex items-center justify-between gap-[8px]">
+          <div className="text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.loyaltyTitle')}</div>
+          <div className="rounded-[6px] bg-green2 px-[8px] py-[4px] text-[10px] font-[700] uppercase tracking-[0.06em] text-green">
+            {t(`loyalty.${loyaltyTier}`)}
+          </div>
+        </div>
+        <div className="grid grid-cols-1 gap-[8px] min-[360px]:grid-cols-3">
+          <div className="rounded-r border border-border bg-bg3 p-[12px]">
+            <div className="text-[10px] font-[600] uppercase tracking-[0.05em] text-muted">{t('home.discountLabel')}</div>
+            <div className="mt-[6px] font-mono text-[18px] font-[700] text-text">{benefits.totalDiscountPercent.toFixed(1)}%</div>
+          </div>
+          <div className="rounded-r border border-border bg-bg3 p-[12px]">
+            <div className="text-[10px] font-[600] uppercase tracking-[0.05em] text-muted">{t('home.commissionLabel')}</div>
+            <div className="mt-[6px] font-mono text-[18px] font-[700] text-text">{benefits.effectiveCommissionPercent.toFixed(1)}%</div>
+          </div>
+          <div className="rounded-r border border-border bg-bg3 p-[12px]">
+            <div className="text-[10px] font-[600] uppercase tracking-[0.05em] text-muted">{t('home.referralLabel')}</div>
+            <div className="mt-[6px] text-[12px] font-[700] text-text">
+              {benefits.isReferralFirstDeal
+                ? t('home.referralFirstDeal')
+                : benefits.hasReferralActivated
+                  ? t('home.referralActive')
+                  : t('home.referralInactive')}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="relative z-10 mx-[16px] mt-[12px] rounded-r2 border border-border2 bg-bg2 p-[16px]">
+        <div className="mb-[10px] text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.referralProgramTitle')}</div>
+        <div className="rounded-r border border-border bg-bg3 p-[12px]">
+          <div className="text-[10px] font-[600] uppercase tracking-[0.05em] text-muted">{t('home.myReferralCode')}</div>
+          <div className="mt-[6px] font-mono text-[18px] font-[700] tracking-[0.08em] text-text">{profileSettings.referralCode}</div>
+          <div className="mt-[4px] text-[11px] font-[500] text-dim">{t('home.referralHint')}</div>
+        </div>
+        <div className="mt-[10px] flex flex-col gap-[8px] min-[360px]:flex-row min-[360px]:items-center">
+          <input
+            type="text"
+            value={referralInput}
+            onChange={(e) => setReferralInput(e.target.value.toUpperCase())}
+            placeholder={t('home.referralInputPlaceholder')}
+            disabled={!canActivateReferral}
+            className="w-full flex-1 rounded-r border border-border bg-bg3 px-[12px] py-[12px] text-[13px] font-mono uppercase tracking-[0.06em] text-text outline-none transition-colors placeholder:text-dim focus:border-green"
+          />
+          <button
+            type="button"
+            onClick={handleActivateReferral}
+            disabled={!canActivateReferral || !referralInput.trim() || referralInput.trim().toUpperCase() === profileSettings.referralCode}
+            className="rounded-r border border-green3 bg-green2 px-[14px] py-[12px] text-[11px] font-[700] uppercase tracking-[0.05em] text-green transition-colors hover:border-green"
+          >
+            {t('home.activateReferral')}
+          </button>
+        </div>
+        <div className="mt-[8px] text-[11px] font-[500] text-dim">
+          {benefits.hasReferralActivated
+            ? t('home.referralActivated', { code: profileSettings.activatedReferralCode })
+            : canActivateReferral
+              ? t('home.referralFirstDeal')
+              : t('home.referralLocked')}
+        </div>
+      </div>
+
       <div className="relative z-10 mx-[16px] mt-[12px] rounded-r2 border border-green3 bg-green2 p-[14px]">
         <div className="text-[11px] font-[600] uppercase tracking-[0.08em] text-green">{t('home.securityCodeTitle')}</div>
         <div className="mt-[6px] flex flex-col gap-[4px] min-[360px]:flex-row min-[360px]:items-center min-[360px]:justify-between">
@@ -289,6 +398,38 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {assignedManagerOrder && (
+        <div className="relative z-10 mx-[16px] mt-[12px] rounded-r2 border border-border2 bg-bg2 p-[16px]">
+          <div className="mb-[10px] flex items-center justify-between gap-[8px]">
+            <div className="text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.managerCardTitle')}</div>
+            <div className="rounded-[6px] bg-green2 px-[8px] py-[4px] text-[10px] font-[700] uppercase tracking-[0.06em] text-green">
+              {t(`orderStatus.${assignedManagerOrder.status}`)}
+            </div>
+          </div>
+          <div className="rounded-r border border-border bg-bg3 p-[14px]">
+            <div className="flex items-start gap-[12px]">
+              <div className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full border border-border2 bg-bg2 text-[15px] font-[700] text-muted">
+                {(assignedManagerOrder.managerName ?? profileSettings.displayName ?? 'M').charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="break-words text-[14px] font-[700] text-text">
+                  {assignedManagerOrder.managerName ?? profileSettings.displayName}
+                </div>
+                <div className="mt-[4px] text-[11px] font-[600] uppercase tracking-[0.05em] text-green">
+                  {profileSettings.roleLabel}
+                </div>
+                <div className="mt-[6px] text-[12px] font-[500] text-muted">
+                  {t('home.managerContactValue', { value: profileSettings.managerContact })}
+                </div>
+                <div className="mt-[4px] text-[11px] font-[500] text-dim">
+                  {t('home.managerDealValue', { id: assignedManagerOrder.id })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Amount Input */}
       <div className="relative z-10 text-[10px] font-[600] tracking-[0.14em] uppercase text-muted px-[20px] pt-[18px] pb-[10px]">{t('home.amountTitle')}</div>
@@ -364,7 +505,9 @@ export default function Home() {
           {getAmount || '—'}
         </div>
         <div className="text-[11px] text-muted mt-[8px] pt-[8px] border-t border-border font-[500] leading-relaxed">
-          {direction === 'GIVE_CASH' ? t('home.infoCash') : t('home.infoUsdt')}
+          {direction === 'GIVE_CASH'
+            ? t('home.infoCash', { commission: benefits.effectiveCommissionPercent.toFixed(1) })
+            : t('home.infoUsdt', { commission: benefits.effectiveCommissionPercent.toFixed(1) })}
         </div>
       </div>
 
@@ -515,6 +658,28 @@ export default function Home() {
           </div>
         ) : (
           <div className="text-[13px] font-[500] text-muted">{t('home.historyEmpty')}</div>
+        )}
+      </div>
+
+      <div className="relative z-10 mx-[16px] mt-[12px] rounded-r2 border border-border2 bg-bg2 p-[16px]">
+        <div className="mb-[12px] text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.reviewsTitle')}</div>
+        {latestReviews.length > 0 ? (
+          <div className="space-y-[10px]">
+            {latestReviews.map((review) => (
+              <div key={review.id} className="rounded-r border border-border bg-bg3 p-[12px]">
+                <div className="flex items-center justify-between gap-[8px]">
+                  <div className="text-[12px] font-[700] text-text">{review.userHandle}</div>
+                  <div className="text-[12px] font-[700] text-amber">{'★'.repeat(review.rating)}</div>
+                </div>
+                <div className="mt-[4px] text-[12px] font-[500] text-muted">{review.text}</div>
+                <div className="mt-[6px] text-[11px] font-[500] text-dim">
+                  {t(`cities.${review.cityKey}`)} · {new Date(review.createdAt).toLocaleDateString(language)}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-[13px] font-[500] text-muted">{t('home.reviewsEmpty')}</div>
         )}
       </div>
 

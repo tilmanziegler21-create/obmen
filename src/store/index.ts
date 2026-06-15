@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { ExchangeState, City, Rates, ExchangeOrder, OrderStatus } from '../types';
+import { generateReferralCode, getCommissionMultiplier } from '../lib/customer';
 
 const LEGACY_CITY_NAME_TO_KEY: Record<string, string> = {
   'Берлин': 'berlin',
@@ -39,6 +40,14 @@ const DEFAULT_CHECKOUT_PREFILL = {
   network: 'TRC-20',
 } as const;
 const DEFAULT_ANTI_PHISHING_CODE = 'BULL';
+const DEFAULT_PROFILE_SETTINGS = {
+  displayName: 'CryptoBull Manager',
+  roleLabel: 'Manager',
+  bio: 'Премиальный обмен EUR и USDT в Telegram.',
+  managerContact: '@cryptobull_manager',
+  referralCode: generateReferralCode('cryptobull'),
+  activatedReferralCode: '',
+} as const;
 
 export const useStore = create<ExchangeState>()(
   persist(
@@ -49,6 +58,9 @@ export const useStore = create<ExchangeState>()(
       orders: [],
       usdtReserve: 2500,
       antiPhishingCode: DEFAULT_ANTI_PHISHING_CODE,
+      profileSettings: DEFAULT_PROFILE_SETTINGS,
+      reviews: [],
+      commissionPercent: 4,
       checkoutPrefill: DEFAULT_CHECKOUT_PREFILL,
       isLoading: false,
       
@@ -73,6 +85,51 @@ export const useStore = create<ExchangeState>()(
 
       updateAntiPhishingCode: (code) =>
         set({ antiPhishingCode: code.trim() || DEFAULT_ANTI_PHISHING_CODE }),
+
+      updateProfileSettings: (settings) =>
+        set((state) => ({
+          profileSettings: {
+            ...state.profileSettings,
+            ...settings,
+            referralCode:
+              settings.referralCode !== undefined
+                ? settings.referralCode.trim().toUpperCase()
+                : state.profileSettings.referralCode,
+            activatedReferralCode:
+              settings.activatedReferralCode !== undefined
+                ? settings.activatedReferralCode.trim().toUpperCase()
+                : state.profileSettings.activatedReferralCode,
+          },
+        })),
+
+      setCommissionPercent: (value) => {
+        const commissionPercent = Math.max(0, Math.min(4, Number(value) || 0));
+        set({ commissionPercent });
+
+        const { giveAmount, getAmount } = get();
+        if (giveAmount) {
+          get().calculateGetAmount();
+        } else if (getAmount) {
+          get().calculateGiveAmount();
+        }
+      },
+
+      addReview: (review) =>
+        set((state) => ({
+          reviews: [
+            {
+              ...review,
+              id: `RV-${Date.now().toString().slice(-8)}`,
+              createdAt: new Date().toISOString(),
+            },
+            ...state.reviews,
+          ].slice(0, 20),
+        })),
+
+      removeReview: (id) =>
+        set((state) => ({
+          reviews: state.reviews.filter((review) => review.id !== id),
+        })),
       
       toggleCityActive: (id) => set((state) => ({
         cities: state.cities.map(city => 
@@ -200,7 +257,7 @@ export const useStore = create<ExchangeState>()(
       })),
       
       calculateGetAmount: () => {
-        const { giveAmount, direction, rates } = get();
+        const { giveAmount, direction, rates, commissionPercent } = get();
         if (!giveAmount || isNaN(Number(giveAmount))) {
           set({ getAmount: '' });
           return;
@@ -213,13 +270,15 @@ export const useStore = create<ExchangeState>()(
         // Client gives EUR (GIVE_CASH) -> Service takes 4% commission (Client gets less USDT)
         // Client gives USDT (GIVE_USDT) -> Service takes 4% commission (Client gets less EUR)
         
+        const multiplier = getCommissionMultiplier(commissionPercent);
+
         if (direction === 'GIVE_CASH') {
           // Buy USDT with EUR. Client gets less USDT because of 4% fee
-          result = (amount * rates.EUR_USDT) * 0.96;
+          result = (amount * rates.EUR_USDT) * multiplier;
           set({ getAmount: result > 0 ? result.toFixed(2) : '' });
         } else {
           // Sell USDT for EUR. Client gets less EUR because of 4% fee
-          result = (amount / rates.EUR_USDT) * 0.96;
+          result = (amount / rates.EUR_USDT) * multiplier;
           // Round EUR to nearest 10
           result = Math.floor(result / 10) * 10;
           set({ getAmount: result > 0 ? result.toString() : '' });
@@ -227,7 +286,7 @@ export const useStore = create<ExchangeState>()(
       },
       
       calculateGiveAmount: () => {
-        const { getAmount, direction, rates } = get();
+        const { getAmount, direction, rates, commissionPercent } = get();
         if (!getAmount || isNaN(Number(getAmount))) {
           set({ giveAmount: '' });
           return;
@@ -236,11 +295,13 @@ export const useStore = create<ExchangeState>()(
         const amount = Number(getAmount);
         let result = 0;
         
+        const multiplier = getCommissionMultiplier(commissionPercent);
+
         if (direction === 'GIVE_CASH') {
-          result = amount / (rates.EUR_USDT * 0.96);
+          result = amount / (rates.EUR_USDT * multiplier);
           set({ giveAmount: result > 0 ? result.toFixed(2) : '' });
         } else {
-          result = (amount * rates.EUR_USDT) / 0.96;
+          result = (amount * rates.EUR_USDT) / multiplier;
           // When giving USDT to get exact EUR, round the required USDT to 2 decimals
           set({ giveAmount: result > 0 ? result.toFixed(2) : '' });
         }
@@ -254,7 +315,7 @@ export const useStore = create<ExchangeState>()(
     }),
     {
       name: 'cryptobull-storage',
-      version: 6,
+      version: 8,
       // Persist core admin and order data, reset user inputs on reload
       partialize: (state) => ({
         cities: state.cities,
@@ -263,6 +324,8 @@ export const useStore = create<ExchangeState>()(
         orders: state.orders,
         usdtReserve: state.usdtReserve,
         antiPhishingCode: state.antiPhishingCode,
+        profileSettings: state.profileSettings,
+        reviews: state.reviews,
       }),
       migrate: (persistedState) => {
         const state = persistedState as ExchangeState & {
@@ -271,6 +334,8 @@ export const useStore = create<ExchangeState>()(
           usdtReserve?: number;
           rateUpdatedAt?: string;
           antiPhishingCode?: string;
+          profileSettings?: Partial<ExchangeState['profileSettings']>;
+          reviews?: ExchangeState['reviews'];
         };
 
         if (!state?.cities) {
@@ -283,10 +348,19 @@ export const useStore = create<ExchangeState>()(
             ...order,
             managerName: order.managerName ?? null,
             antiPhishingCode: order.antiPhishingCode ?? state.antiPhishingCode ?? DEFAULT_ANTI_PHISHING_CODE,
+            commissionPercent: order.commissionPercent ?? 4,
+            discountPercent: order.discountPercent ?? 0,
+            referralCodeUsed: order.referralCodeUsed ?? null,
           })),
           usdtReserve: state.usdtReserve ?? 2500,
           rateUpdatedAt: state.rateUpdatedAt ?? new Date().toISOString(),
           antiPhishingCode: state.antiPhishingCode ?? DEFAULT_ANTI_PHISHING_CODE,
+          profileSettings: {
+            ...DEFAULT_PROFILE_SETTINGS,
+            ...(state.profileSettings ?? {}),
+          },
+          reviews: state.reviews ?? [],
+          commissionPercent: 4,
           cities: state.cities.map((city) => {
             const legacyCity = city as City & { name?: string };
 

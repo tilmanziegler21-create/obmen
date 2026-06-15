@@ -1,11 +1,13 @@
-import { useEffect } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import WebApp from '@twa-dev/sdk';
-import Home from './pages/Home';
-import Checkout from './pages/Checkout';
-import Admin from './pages/Admin';
 import { useStore } from './store';
 import { useI18n } from './i18n';
+
+const Home = lazy(() => import('./pages/Home'));
+const Checkout = lazy(() => import('./pages/Checkout'));
+const Admin = lazy(() => import('./pages/Admin'));
+const Profile = lazy(() => import('./pages/Profile'));
 
 function App() {
   const fetchInitialData = useStore(state => state.fetchInitialData);
@@ -39,11 +41,14 @@ function App() {
           className="relative z-10 flex-1 flex flex-col"
           style={{ paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}
         >
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/checkout" element={<Checkout />} />
-            <Route path="/admin" element={<Admin />} />
-          </Routes>
+          <Suspense fallback={<div className="flex-1 bg-bg2" />}>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/checkout" element={<Checkout />} />
+              <Route path="/admin" element={<Admin />} />
+              <Route path="/profile" element={<Profile />} />
+            </Routes>
+          </Suspense>
         </div>
       </div>
     </BrowserRouter>

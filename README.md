@@ -10,6 +10,7 @@ Telegram Mini App для обмена `EUR ⇄ USDT` с premium dark UI, руч�
 - `TailwindCSS`
 - `Zustand`
 - `Telegram Web Apps SDK`
+- `Express`
 
 ## Что Уже Есть
 
@@ -17,7 +18,8 @@ Telegram Mini App для обмена `EUR ⇄ USDT` с premium dark UI, руч�
 - Лимит обмена `500 EUR`
 - Ручное управление резервом наличных по городам
 - Скрытая админка `/admin` с доступом по `VITE_ADMIN_IDS`
-- Уведомления о новых заявках через Telegram Bot API
+- Серверный endpoint `/api/orders` для отправки заявок в Telegram
+- Базовая проверка `Telegram WebApp initData` на backend
 - Мультиязычность `RU / EN / UK / DE`
 
 ## Переменные Окружения
@@ -25,8 +27,10 @@ Telegram Mini App для обмена `EUR ⇄ USDT` с premium dark UI, руч�
 Скопируй `.env.example` в `.env` и заполни значения:
 
 ```env
-VITE_BOT_TOKEN=1234567890:your_bot_token
-VITE_CHAT_ID=-1001234567890
+BOT_TOKEN=1234567890:your_bot_token
+CHAT_ID=-1001234567890
+REQUIRE_TELEGRAM_INIT=false
+ADMIN_IDS=123456789,987654321
 VITE_ADMIN_IDS=123456789,987654321
 ```
 
@@ -37,13 +41,26 @@ npm install
 npm run dev
 ```
 
+`npm run dev` теперь поднимает сразу:
+
+- Vite-клиент
+- Node/Express backend на `http://localhost:3001`
+
 ## Проверка
 
 ```bash
 npm run lint
 npm run check
+npm run build
+```
+
+## Production
+
+```bash
+npm run build
+npm run start
 ```
 
 ## Деплой
 
-Проект подготовлен под статический деплой. Для Render используется `render.yaml`.
+Проект переведен на Node web service деплой. Для Render используется `render.yaml`, backend раздает `dist` и обрабатывает `/api/*`.

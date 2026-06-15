@@ -17,6 +17,7 @@ export default function Admin() {
     orders,
     usdtReserve,
     antiPhishingCode,
+    profileSettings,
     updateCityLimit,
     updateUsdtReserve,
     updateRate,
@@ -27,6 +28,10 @@ export default function Admin() {
   } = useStore();
   
   const user = WebApp.initDataUnsafe?.user;
+  const managerFallbackName = user?.username
+    ? `@${user.username}`
+    : [user?.first_name, user?.last_name].filter(Boolean).join(' ') || t('checkout.unknownUser');
+  const managerSelfName = profileSettings.displayName.trim() || managerFallbackName;
   const adminIds = (import.meta.env.VITE_ADMIN_IDS || '').split(',').map(id => id.trim());
   const isAdmin = user?.id ? adminIds.includes(user.id.toString()) : false;
 
@@ -43,9 +48,22 @@ export default function Admin() {
   const [statusFilter, setStatusFilter] = useState<'all' | OrderStatus>('all');
   const [cityFilter, setCityFilter] = useState<'all' | string>('all');
   const [directionFilter, setDirectionFilter] = useState<'all' | ExchangeDirection>('all');
+  const [onlyMyOrders, setOnlyMyOrders] = useState(false);
   const formattedRateUpdatedAt = useMemo(
     () => new Date(rateUpdatedAt).toLocaleString(language),
     [language, rateUpdatedAt],
+  );
+  const incomingOrdersCount = useMemo(
+    () => orders.filter((order) => order.status === 'accepted').length,
+    [orders],
+  );
+  const myOrdersCount = useMemo(
+    () => orders.filter((order) => order.managerName === managerSelfName).length,
+    [managerSelfName, orders],
+  );
+  const myActiveOrdersCount = useMemo(
+    () => orders.filter((order) => order.managerName === managerSelfName && (order.status === 'accepted' || order.status === 'processing')).length,
+    [managerSelfName, orders],
   );
 
   const filteredOrders = useMemo(() => {
@@ -63,10 +81,11 @@ export default function Admin() {
       const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
       const matchesCity = cityFilter === 'all' || order.cityId === cityFilter;
       const matchesDirection = directionFilter === 'all' || order.direction === directionFilter;
+      const matchesManager = !onlyMyOrders || order.managerName === managerSelfName;
 
-      return matchesSearch && matchesStatus && matchesCity && matchesDirection;
+      return matchesSearch && matchesStatus && matchesCity && matchesDirection && matchesManager;
     });
-  }, [cityFilter, directionFilter, orderSearch, orders, statusFilter]);
+  }, [cityFilter, directionFilter, managerSelfName, onlyMyOrders, orderSearch, orders, statusFilter]);
   const clientStatsMap = useMemo(() => {
     const stats = new Map<string, { deals: number; volumeEUR: number; firstOrderAt: string }>();
 
@@ -119,6 +138,13 @@ export default function Admin() {
   const handleToggle = (id: string) => {
     WebApp.HapticFeedback.selectionChanged();
     toggleCityActive(id);
+  };
+
+  const handleClaimOrder = (orderId: string) => {
+    WebApp.HapticFeedback.impactOccurred('medium');
+    updateOrderManager(orderId, managerSelfName);
+    updateOrderStatus(orderId, 'processing');
+    setEditManagers((prev) => ({ ...prev, [orderId]: managerSelfName }));
   };
 
   return (
@@ -296,9 +322,30 @@ export default function Admin() {
         <div className="bg-bg2 border-[1.5px] border-border2 rounded-r2 p-[20px] space-y-[16px]">
           <div className="flex items-center justify-between mb-[8px]">
             <h2 className="text-[14px] font-[700] text-text">{t('admin.ordersTitle')}</h2>
-            <span className="text-[10px] bg-bg3 text-muted px-[8px] py-[4px] rounded-[6px] uppercase tracking-[0.06em] font-[600]">
-              {filteredOrders.length}
-            </span>
+            <div className="flex items-center gap-[6px]">
+              <span className="text-[10px] bg-green2 text-green px-[8px] py-[4px] rounded-[6px] uppercase tracking-[0.06em] font-[600]">
+                {t('admin.incomingCount', { count: incomingOrdersCount })}
+              </span>
+              <span className="text-[10px] bg-[rgba(79,142,247,0.12)] text-[#4F8EF7] px-[8px] py-[4px] rounded-[6px] uppercase tracking-[0.06em] font-[600]">
+                {t('admin.myOrdersCount', { count: myOrdersCount })}
+              </span>
+              <span className="text-[10px] bg-bg3 text-muted px-[8px] py-[4px] rounded-[6px] uppercase tracking-[0.06em] font-[600]">
+                {filteredOrders.length}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-[8px] min-[360px]:grid-cols-2">
+            <div className="rounded-[12px] border border-border2 bg-bg3 px-[12px] py-[10px]">
+              <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-muted">{t('admin.managerProfileTitle')}</div>
+              <div className="mt-[6px] text-[13px] font-[700] text-text">{managerSelfName}</div>
+              <div className="mt-[4px] text-[11px] font-[500] text-dim">{profileSettings.managerContact}</div>
+            </div>
+            <div className="rounded-[12px] border border-border2 bg-bg3 px-[12px] py-[10px]">
+              <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-muted">{t('admin.myActiveOrders')}</div>
+              <div className="mt-[6px] font-mono text-[18px] font-[700] text-text">{myActiveOrdersCount}</div>
+              <div className="mt-[4px] text-[11px] font-[500] text-dim">{t('admin.myOrdersHint')}</div>
+            </div>
           </div>
 
           <div className="space-y-[12px] rounded-[16px] border border-border2 bg-bg3 p-[14px]">
@@ -368,6 +415,18 @@ export default function Admin() {
               </div>
             </div>
 
+            <button
+              type="button"
+              onClick={() => setOnlyMyOrders((prev) => !prev)}
+              className={`w-full rounded-[10px] border px-[14px] py-[11px] text-[12px] font-[700] uppercase tracking-[0.05em] transition-colors ${
+                onlyMyOrders
+                  ? 'border-green bg-green2 text-green'
+                  : 'border-border2 bg-bg2 text-text hover:border-green hover:text-green'
+              }`}
+            >
+              {onlyMyOrders ? t('admin.showAllOrders') : t('admin.showOnlyMyOrders')}
+            </button>
+
             <div className="text-[12px] font-[500] text-muted">
               {t('admin.filteredCount', { count: filteredOrders.length })}
             </div>
@@ -399,6 +458,20 @@ export default function Admin() {
 
                   <div className="mb-[10px] text-[11px] font-[500] text-dim">
                     {new Date(order.createdAt).toLocaleString()} · {order.userHandle}
+                  </div>
+
+                  <div className="mb-[10px]">
+                    <button
+                      type="button"
+                      onClick={() => handleClaimOrder(order.id)}
+                      className={`w-full rounded-[10px] border px-[14px] py-[12px] text-[12px] font-[700] uppercase tracking-[0.05em] transition-colors ${
+                        order.managerName === managerSelfName
+                          ? 'border-green bg-green2 text-green'
+                          : 'border-border2 bg-bg2 text-text hover:border-green hover:text-green'
+                      }`}
+                    >
+                      {order.managerName === managerSelfName ? t('admin.myExchange') : t('admin.claimOrder')}
+                    </button>
                   </div>
 
                   {clientStats && (

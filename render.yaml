@@ -1,10 +1,6 @@
 services:
   - type: web
     name: cryptobull-p2p
-    env: static
+    env: node
     buildCommand: npm install && npm run build
-    staticPublishPath: ./dist
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
+    startCommand: npm run start
