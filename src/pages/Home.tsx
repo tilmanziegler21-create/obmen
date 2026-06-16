@@ -33,6 +33,7 @@ export default function Home() {
 
   const user = WebApp.initDataUnsafe?.user;
   const [citySearch, setCitySearch] = useState('');
+  const [isCalculatorFocused, setIsCalculatorFocused] = useState(false);
   const currentUserHandle = user?.username ? `@${user.username}` : (user?.first_name || t('checkout.unknownUser'));
   
   const adminIds = (import.meta.env.VITE_ADMIN_IDS || '').split(',').map((id: string) => id.trim());
@@ -108,6 +109,31 @@ export default function Home() {
     minute: '2-digit',
   });
   const selectedCityReserve = currentCity ? currentCity.limitEUR : 0;
+  const hasInputValue = Number(giveAmount) > 0;
+  const calculatorAccent = direction === 'GIVE_CASH' ? 'amber' : 'usdt';
+  const calculatorGlowClass = isValid
+    ? calculatorAccent === 'amber'
+      ? 'from-[rgba(245,166,35,0.22)] via-[rgba(245,166,35,0.1)] to-transparent'
+      : 'from-[rgba(38,161,123,0.22)] via-[rgba(38,161,123,0.1)] to-transparent'
+    : isCalculatorFocused || hasInputValue
+      ? calculatorAccent === 'amber'
+        ? 'from-[rgba(245,166,35,0.14)] via-[rgba(245,166,35,0.06)] to-transparent'
+        : 'from-[rgba(38,161,123,0.14)] via-[rgba(38,161,123,0.06)] to-transparent'
+      : 'from-[rgba(255,255,255,0.06)] via-transparent to-transparent';
+  const calculatorBorderClass = isValid
+    ? calculatorAccent === 'amber'
+      ? 'border-[rgba(245,166,35,0.45)] shadow-[0_0_0_1px_rgba(245,166,35,0.12),0_20px_60px_rgba(245,166,35,0.18)]'
+      : 'border-[rgba(38,161,123,0.45)] shadow-[0_0_0_1px_rgba(38,161,123,0.12),0_20px_60px_rgba(38,161,123,0.18)]'
+    : isCalculatorFocused || hasInputValue
+      ? calculatorAccent === 'amber'
+        ? 'border-[rgba(245,166,35,0.28)] shadow-[0_0_0_1px_rgba(245,166,35,0.08),0_16px_42px_rgba(245,166,35,0.1)]'
+        : 'border-[rgba(38,161,123,0.28)] shadow-[0_0_0_1px_rgba(38,161,123,0.08),0_16px_42px_rgba(38,161,123,0.1)]'
+      : 'border-border2 shadow-none';
+  const calculatorBadgeClass = isValid
+    ? calculatorAccent === 'amber'
+      ? 'border-[rgba(245,166,35,0.32)] bg-[rgba(245,166,35,0.14)] text-amber'
+      : 'border-[rgba(38,161,123,0.32)] bg-[rgba(38,161,123,0.14)] text-usdt'
+    : 'border-border2 bg-bg3 text-muted';
 
   const handleNext = () => {
     if (isValid) {
@@ -373,82 +399,129 @@ export default function Home() {
         </div>
       )}
 
-      <div className="relative z-10 text-[10px] font-[600] tracking-[0.14em] uppercase text-muted px-[20px] pt-[18px] pb-[10px]">{t('home.amountTitle')}</div>
-      <div className="relative z-10 mx-[16px]">
-        <div className="bg-bg2 border-[1.5px] border-border2 rounded-r2 p-[18px_18px_14px] transition-colors focus-within:border-green">
-          <div className="flex items-center justify-between mb-[14px]">
-            <div className="flex items-center gap-[8px] bg-bg3 border border-border2 rounded-[10px] p-[7px_12px_7px_8px] text-[13px] font-[700] tracking-[0.02em]">
-              {direction === 'GIVE_CASH' ? (
-                 <div className="w-[24px] h-[24px] rounded-[6px] flex items-center justify-center shrink-0 bg-[#2A2318] border border-[rgba(245,166,35,0.3)] text-amber">
-                    €
-                 </div>
-              ) : (
-                <div className="w-[24px] h-[24px] rounded-[6px] flex items-center justify-center shrink-0 bg-[#1E2A20] border border-[rgba(38,161,123,0.3)]">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <circle cx="8" cy="8" r="7.5" fill="transparent" stroke="#26A17B" strokeWidth="1"/>
-                    <text x="8" y="11.5" textAnchor="middle" fontFamily="'JetBrains Mono',monospace" fontSize="7" fontWeight="700" fill="#26A17B">₮</text>
-                  </svg>
-                </div>
-              )}
-              <span>{direction === 'GIVE_CASH' ? 'EUR' : 'USDT'}</span>
-            </div>
-            <div className="text-[11px] text-muted font-[500] tracking-[0.04em]">{t('home.youGive')}</div>
-          </div>
-          
-          <div className="flex items-baseline gap-[6px]">
-            <div className="font-mono text-[26px] font-[600] text-muted">{direction === 'GIVE_CASH' ? '€' : '₮'}</div>
-            <input 
-              type="number" 
-              value={giveAmount}
-              onChange={(e) => setGiveAmount(e.target.value)}
-              placeholder="0" 
-              min="0" 
-              step="50" 
-              inputMode="decimal"
-              className="flex-1 bg-transparent border-none outline-none font-mono text-[28px] font-[600] text-text w-full placeholder:text-dim min-[360px]:text-[34px]"
-            />
-          </div>
-          
-          <div className="mt-[12px] flex flex-wrap gap-[6px] border-t border-border pt-[12px]">
-            {[100, 250, 500, 1000, 5000].map(val => (
-              <div 
-                key={val} 
-                onClick={() => setAmount(val)}
-                className="min-w-[56px] flex-1 py-[7px] bg-bg3 border border-border rounded-[8px] text-[11px] font-[600] text-muted cursor-pointer text-center transition-all hover:border-border3 hover:text-text active:scale-95"
-              >
-                {val >= 1000 ? `${val/1000}K` : val}
+      <motion.div
+        animate={{
+          scale: isCalculatorFocused ? 1.004 : 1,
+          y: isCalculatorFocused ? -2 : 0,
+        }}
+        transition={{ duration: 0.25, ease: 'easeOut' }}
+        className="relative z-10 mx-[16px] mt-[18px]"
+      >
+        <div className={`pointer-events-none absolute inset-0 rounded-[24px] bg-gradient-to-br ${calculatorGlowClass} blur-[26px] transition-all duration-300 ${isValid ? 'opacity-100' : isCalculatorFocused || hasInputValue ? 'opacity-80' : 'opacity-55'}`}></div>
+        <div className={`relative overflow-hidden rounded-[24px] border bg-bg2/95 p-[18px] transition-all duration-300 ${calculatorBorderClass}`}>
+          <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
+
+          <div className="mb-[18px] flex items-start justify-between gap-[12px]">
+            <div>
+              <div className="text-[28px] font-[800] leading-none text-text min-[360px]:text-[34px]">
+                {t('home.calculatorHint')}
               </div>
-            ))}
+              <div className="mt-[8px] text-[11px] font-[600] tracking-[0.05em] text-muted">
+                {isValid ? t('home.calculatorReady') : t('home.amountTitle')}
+              </div>
+            </div>
+            <div className={`shrink-0 rounded-[999px] border px-[10px] py-[6px] text-[10px] font-[700] uppercase tracking-[0.08em] transition-colors ${calculatorBadgeClass}`}>
+              {direction === 'GIVE_CASH' ? t('home.assetCrypto') : t('home.assetCash')}
+            </div>
           </div>
-        </div>
-      </div>
 
-      <div className="relative z-10 flex justify-center py-[8px]">
-        <div className="w-[36px] h-[36px] rounded-full bg-bg3 border border-border2 flex items-center justify-center text-muted">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M8 3v10M4 9l4 4 4-4" stroke="#4A4F5E" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </div>
-      </div>
+          <div className="rounded-[20px] border border-white/6 bg-[#0f1115] px-[14px] py-[14px]">
+            <div className="flex items-start justify-between gap-[12px]">
+              <div className="min-w-0 flex-1">
+                <div className="text-[13px] font-[500] text-muted">{t('home.youGive')}</div>
+                <div className="mt-[14px] flex items-end gap-[8px]">
+                  <span className="font-mono text-[30px] font-[600] text-text min-[360px]:text-[38px]">
+                    {giveAmount || '0'}
+                  </span>
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-[10px] pl-[8px]">
+                <div className={`flex h-[36px] w-[36px] items-center justify-center rounded-full border ${direction === 'GIVE_CASH' ? 'border-[rgba(245,166,35,0.3)] bg-[#2A2318] text-amber' : 'border-[rgba(38,161,123,0.3)] bg-[#1E2A20] text-usdt'}`}>
+                  {direction === 'GIVE_CASH' ? (
+                    <span className="text-[18px] font-[700]">€</span>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
+                      <circle cx="8" cy="8" r="7.5" fill="transparent" stroke="#26A17B" strokeWidth="1"/>
+                      <text x="8" y="11.5" textAnchor="middle" fontFamily="'JetBrains Mono',monospace" fontSize="7" fontWeight="700" fill="#26A17B">₮</text>
+                    </svg>
+                  )}
+                </div>
+                <div className="text-[18px] font-[500] text-text min-[360px]:text-[20px]">
+                  {direction === 'GIVE_CASH' ? 'EUR' : 'USDT'}
+                </div>
+              </div>
+            </div>
 
-      <div className="relative z-10 mx-[16px] bg-bg2 border border-border rounded-r2 p-[16px_18px]">
-        <div className="flex items-center justify-between mb-[10px]">
-          <div className="flex items-center gap-[8px] text-[13px] font-[700] text-text">
-            <span>{direction === 'GIVE_CASH' ? 'USDT' : 'EUR'}</span>
+            <div className="my-[14px] flex items-center gap-[12px]">
+              <div className="h-px flex-1 bg-white/12"></div>
+              <div className={`flex h-[44px] w-[44px] items-center justify-center rounded-full border border-[rgba(233,214,43,0.28)] bg-[rgba(233,214,43,0.08)] shadow-[0_0_24px_rgba(233,214,43,0.12)] transition-transform duration-300 ${isCalculatorFocused || hasInputValue ? 'scale-105' : ''}`}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                  <path d="M7 7h10M7 7l3-3M7 7l3 3" stroke="#E9D62B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M17 17H7M17 17l-3-3M17 17l-3 3" stroke="#E9D62B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+              <div className="h-px flex-1 bg-white/12"></div>
+            </div>
+
+            <div className="flex items-start justify-between gap-[12px]">
+              <div className="min-w-0 flex-1">
+                <div className="text-[13px] font-[500] text-muted">{t('checkout.youGet')}</div>
+                <div className={`mt-[14px] font-mono text-[30px] font-[600] transition-colors duration-300 min-[360px]:text-[38px] ${getAmount ? 'text-text' : 'text-muted'}`}>
+                  {getAmount || '0'}
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-[10px] pl-[8px]">
+                <div className={`flex h-[36px] w-[36px] items-center justify-center rounded-full border ${direction === 'GIVE_CASH' ? 'border-[rgba(38,161,123,0.3)] bg-[#1E2A20]' : 'border-[rgba(245,166,35,0.3)] bg-[#2A2318] text-amber'}`}>
+                  {direction === 'GIVE_CASH' ? (
+                    <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
+                      <circle cx="8" cy="8" r="7.5" fill="transparent" stroke="#26A17B" strokeWidth="1"/>
+                      <text x="8" y="11.5" textAnchor="middle" fontFamily="'JetBrains Mono',monospace" fontSize="7" fontWeight="700" fill="#26A17B">₮</text>
+                    </svg>
+                  ) : (
+                    <span className="text-[18px] font-[700]">€</span>
+                  )}
+                </div>
+                <div className="text-[18px] font-[500] text-text min-[360px]:text-[20px]">
+                  {direction === 'GIVE_CASH' ? 'USDT' : 'EUR'}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-[14px] flex items-center gap-[10px] border-t border-white/8 pt-[12px]">
+              <input
+                type="number"
+                value={giveAmount}
+                onChange={(e) => setGiveAmount(e.target.value)}
+                onFocus={() => setIsCalculatorFocused(true)}
+                onBlur={() => setIsCalculatorFocused(false)}
+                placeholder="0"
+                min="0"
+                step="50"
+                inputMode="decimal"
+                className="flex-1 rounded-[12px] border border-white/8 bg-bg3/70 px-[12px] py-[10px] font-mono text-[14px] font-[600] text-text outline-none transition-colors placeholder:text-dim focus:border-green"
+              />
+              <div className="text-[11px] font-[600] text-muted">
+                {direction === 'GIVE_CASH'
+                  ? t('home.infoCash', { commission: benefits.effectiveCommissionPercent.toFixed(1) })
+                  : t('home.infoUsdt', { commission: benefits.effectiveCommissionPercent.toFixed(1) })}
+              </div>
+            </div>
+
+            <div className="mt-[12px] flex flex-wrap gap-[6px]">
+              {[100, 250, 500, 1000, 5000].map((val) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => setAmount(val)}
+                  className="min-w-[56px] flex-1 rounded-[10px] border border-white/8 bg-bg3 px-[10px] py-[8px] text-[11px] font-[600] text-muted transition-all hover:border-border3 hover:text-text active:scale-95"
+                >
+                  {val >= 1000 ? `${val / 1000}K` : val}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className={`text-[10px] font-[600] tracking-[0.08em] uppercase p-[3px_8px] rounded-[6px] ${direction === 'GIVE_CASH' ? 'bg-[rgba(38,161,123,0.1)] text-usdt' : 'bg-[rgba(245,166,35,0.1)] text-amber'}`}>
-            {direction === 'GIVE_CASH' ? t('home.assetCrypto') : t('home.assetCash')}
-          </div>
         </div>
-        <div className="font-mono text-[28px] font-[600] mt-[4px]" style={{ color: getAmount ? 'var(--text)' : 'var(--muted)' }}>
-          {getAmount || '—'}
-        </div>
-        <div className="text-[11px] text-muted mt-[8px] pt-[8px] border-t border-border font-[500] leading-relaxed">
-          {direction === 'GIVE_CASH'
-            ? t('home.infoCash', { commission: benefits.effectiveCommissionPercent.toFixed(1) })
-            : t('home.infoUsdt', { commission: benefits.effectiveCommissionPercent.toFixed(1) })}
-        </div>
-      </div>
+      </motion.div>
 
       <div className="relative z-10 mx-[16px] mt-[12px] rounded-r2 border border-border2 bg-bg2 p-[16px]">
         <div className="mb-[10px] text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.exchangeSummaryTitle')}</div>
