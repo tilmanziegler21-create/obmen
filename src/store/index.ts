@@ -1,7 +1,16 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { ExchangeState, City, Rates, ExchangeOrder, OrderStatus } from '../types';
+import { ExchangeState, City, Rates, ExchangeOrder } from '../types';
 import { generateReferralCode, getCommissionMultiplier } from '../lib/customer';
+
+type SharedServerState = Pick<
+  ExchangeState,
+  'cities' | 'rates' | 'rateUpdatedAt' | 'orders' | 'usdtReserve' | 'antiPhishingCode'
+>;
+
+async function readJsonResponse<T>(response: Response): Promise<T | null> {
+  return response.json().catch(() => null) as Promise<T | null>;
+}
 
 const LEGACY_CITY_NAME_TO_KEY: Record<string, string> = {
   'Берлин': 'berlin',
@@ -13,26 +22,25 @@ const LEGACY_CITY_NAME_TO_KEY: Record<string, string> = {
 };
 
 const INITIAL_CITIES: City[] = [
-  { id: '1', cityKey: 'berlin', isActive: true, limitEUR: 500 },
-  { id: '2', cityKey: 'munich', isActive: true, limitEUR: 500 },
-  { id: '3', cityKey: 'hamburg', isActive: true, limitEUR: 500 },
-  { id: '4', cityKey: 'frankfurt', isActive: true, limitEUR: 500 },
-  { id: '5', cityKey: 'cologne', isActive: true, limitEUR: 500 },
-  { id: '6', cityKey: 'dusseldorf', isActive: true, limitEUR: 500 },
-  { id: '7', cityKey: 'stuttgart', isActive: true, limitEUR: 500 },
-  { id: '8', cityKey: 'leipzig', isActive: true, limitEUR: 500 },
-  { id: '9', cityKey: 'dortmund', isActive: true, limitEUR: 500 },
-  { id: '10', cityKey: 'essen', isActive: true, limitEUR: 500 },
-  { id: '11', cityKey: 'bremen', isActive: true, limitEUR: 500 },
-  { id: '12', cityKey: 'hannover', isActive: true, limitEUR: 500 },
-  { id: '13', cityKey: 'nuremberg', isActive: true, limitEUR: 500 },
+  { id: '1', cityKey: 'berlin', isActive: true, limitEUR: 500, groupChatId: '' },
+  { id: '2', cityKey: 'munich', isActive: true, limitEUR: 500, groupChatId: '' },
+  { id: '3', cityKey: 'hamburg', isActive: true, limitEUR: 500, groupChatId: '' },
+  { id: '4', cityKey: 'frankfurt', isActive: true, limitEUR: 500, groupChatId: '' },
+  { id: '5', cityKey: 'cologne', isActive: true, limitEUR: 500, groupChatId: '' },
+  { id: '6', cityKey: 'dusseldorf', isActive: true, limitEUR: 500, groupChatId: '' },
+  { id: '7', cityKey: 'stuttgart', isActive: true, limitEUR: 500, groupChatId: '' },
+  { id: '8', cityKey: 'leipzig', isActive: true, limitEUR: 500, groupChatId: '' },
+  { id: '9', cityKey: 'dortmund', isActive: true, limitEUR: 500, groupChatId: '' },
+  { id: '10', cityKey: 'essen', isActive: true, limitEUR: 500, groupChatId: '' },
+  { id: '11', cityKey: 'bremen', isActive: true, limitEUR: 500, groupChatId: '' },
+  { id: '12', cityKey: 'hannover', isActive: true, limitEUR: 500, groupChatId: '' },
+  { id: '13', cityKey: 'nuremberg', isActive: true, limitEUR: 500, groupChatId: '' },
 ];
 
 const MOCK_RATES: Rates = {
   EUR_USDT: 1.08, // 1 EUR = 1.08 USDT
 };
 
-const ACTIVE_ORDER_STATUSES: Set<OrderStatus> = new Set(['accepted', 'processing']);
 const DEFAULT_CHECKOUT_PREFILL = {
   sourceOrderId: null,
   contact: '',
@@ -70,21 +78,108 @@ export const useStore = create<ExchangeState>()(
       giveAmount: '',
       getAmount: '',
       
-      updateCityLimit: (id, limit) => set((state) => ({
-        cities: state.cities.map(city => 
-          city.id === id ? { ...city, limitEUR: limit } : city
-        )
-      })),
+      updateCityLimit: async (id, limit) => {
+        const city = get().cities.find((item) => item.id === id);
+        if (!city) {
+          return;
+        }
 
-      updateUsdtReserve: (amount) => set({ usdtReserve: amount }),
+        try {
+          const response = await fetch(`/api/admin/cities/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              limitEUR: limit,
+              groupChatId: city.groupChatId,
+              isActive: city.isActive,
+            }),
+          });
+          const data = await readJsonResponse<{ state: SharedServerState }>(response);
 
-      updateRate: (rate) => set({
-        rates: { EUR_USDT: rate },
-        rateUpdatedAt: new Date().toISOString(),
-      }),
+          if (response.ok && data?.state) {
+            set({ ...data.state });
+          }
+        } catch (error) {
+          console.error('Failed to update city limit', error);
+        }
+      },
 
-      updateAntiPhishingCode: (code) =>
-        set({ antiPhishingCode: code.trim() || DEFAULT_ANTI_PHISHING_CODE }),
+      updateCityGroupChatId: async (id, groupChatId) => {
+        const city = get().cities.find((item) => item.id === id);
+        if (!city) {
+          return;
+        }
+
+        try {
+          const response = await fetch(`/api/admin/cities/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              limitEUR: city.limitEUR,
+              groupChatId,
+              isActive: city.isActive,
+            }),
+          });
+          const data = await readJsonResponse<{ state: SharedServerState }>(response);
+
+          if (response.ok && data?.state) {
+            set({ ...data.state });
+          }
+        } catch (error) {
+          console.error('Failed to update city group chat id', error);
+        }
+      },
+
+      updateUsdtReserve: async (amount) => {
+        try {
+          const response = await fetch('/api/admin/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ usdtReserve: amount }),
+          });
+          const data = await readJsonResponse<{ state: SharedServerState }>(response);
+
+          if (response.ok && data?.state) {
+            set({ ...data.state });
+          }
+        } catch (error) {
+          console.error('Failed to update USDT reserve', error);
+        }
+      },
+
+      updateRate: async (rate) => {
+        try {
+          const response = await fetch('/api/admin/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rate }),
+          });
+          const data = await readJsonResponse<{ state: SharedServerState }>(response);
+
+          if (response.ok && data?.state) {
+            set({ ...data.state });
+          }
+        } catch (error) {
+          console.error('Failed to update rate', error);
+        }
+      },
+
+      updateAntiPhishingCode: async (code) => {
+        try {
+          const response = await fetch('/api/admin/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ antiPhishingCode: code.trim() || DEFAULT_ANTI_PHISHING_CODE }),
+          });
+          const data = await readJsonResponse<{ state: SharedServerState }>(response);
+
+          if (response.ok && data?.state) {
+            set({ ...data.state });
+          }
+        } catch (error) {
+          console.error('Failed to update anti-phishing code', error);
+        }
+      },
 
       updateProfileSettings: (settings) =>
         set((state) => ({
@@ -131,11 +226,31 @@ export const useStore = create<ExchangeState>()(
           reviews: state.reviews.filter((review) => review.id !== id),
         })),
       
-      toggleCityActive: (id) => set((state) => ({
-        cities: state.cities.map(city => 
-          city.id === id ? { ...city, isActive: !city.isActive } : city
-        )
-      })),
+      toggleCityActive: async (id) => {
+        const city = get().cities.find((item) => item.id === id);
+        if (!city) {
+          return;
+        }
+
+        try {
+          const response = await fetch(`/api/admin/cities/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              limitEUR: city.limitEUR,
+              groupChatId: city.groupChatId,
+              isActive: !city.isActive,
+            }),
+          });
+          const data = await readJsonResponse<{ state: SharedServerState }>(response);
+
+          if (response.ok && data?.state) {
+            set({ ...data.state });
+          }
+        } catch (error) {
+          console.error('Failed to toggle city state', error);
+        }
+      },
       
       setCity: (id) => set({ selectedCityId: id }),
       setDirection: (dir) => set({ direction: dir, giveAmount: '', getAmount: '' }),
@@ -200,61 +315,41 @@ export const useStore = create<ExchangeState>()(
         return createdOrder;
       },
 
-      updateOrderStatus: (id, status) => set((state) => {
-        const existingOrder = state.orders.find((order) => order.id === id);
+      updateOrderStatus: async (id, status) => {
+        try {
+          const response = await fetch(`/api/admin/orders/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status }),
+          });
+          const data = await readJsonResponse<{ state: SharedServerState }>(response);
 
-        if (!existingOrder || existingOrder.status === status) {
-          return state;
+          if (response.ok && data?.state) {
+            set({ ...data.state });
+          }
+        } catch (error) {
+          console.error('Failed to update order status', error);
         }
+      },
 
-        const wasActive = ACTIVE_ORDER_STATUSES.has(existingOrder.status);
-        const isActive = ACTIVE_ORDER_STATUSES.has(status);
-        const shouldReleaseReserve = wasActive && !isActive && status === 'rejected';
-        const shouldReserveAgain = !wasActive && isActive && existingOrder.status === 'rejected';
+      updateOrderManager: async (id, managerName) => {
+        try {
+          const response = await fetch(`/api/admin/orders/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              managerName: managerName && managerName.trim().length > 0 ? managerName.trim() : null,
+            }),
+          });
+          const data = await readJsonResponse<{ state: SharedServerState }>(response);
 
-        return {
-          usdtReserve:
-            existingOrder.direction === 'GIVE_CASH'
-              ? shouldReleaseReserve
-                ? state.usdtReserve + Number(existingOrder.getAmount)
-                : shouldReserveAgain
-                  ? Math.max(0, state.usdtReserve - Number(existingOrder.getAmount))
-                  : state.usdtReserve
-              : state.usdtReserve,
-          cities:
-            existingOrder.direction === 'GIVE_USDT'
-              ? state.cities.map((city) => {
-                  if (city.id !== existingOrder.cityId) {
-                    return city;
-                  }
-
-                  if (shouldReleaseReserve) {
-                    return { ...city, limitEUR: city.limitEUR + Number(existingOrder.getAmount) };
-                  }
-
-                  if (shouldReserveAgain) {
-                    return { ...city, limitEUR: Math.max(0, city.limitEUR - Number(existingOrder.getAmount)) };
-                  }
-
-                  return city;
-                })
-              : state.cities,
-          orders: state.orders.map((order) =>
-            order.id === id ? { ...order, status } : order
-          ),
-        };
-      }),
-
-      updateOrderManager: (id, managerName) => set((state) => ({
-        orders: state.orders.map((order) =>
-          order.id === id
-            ? {
-                ...order,
-                managerName: managerName && managerName.trim().length > 0 ? managerName.trim() : null,
-              }
-            : order,
-        ),
-      })),
+          if (response.ok && data?.state) {
+            set({ ...data.state });
+          }
+        } catch (error) {
+          console.error('Failed to update order manager', error);
+        }
+      },
       
       calculateGetAmount: () => {
         const { giveAmount, direction, rates, commissionPercent } = get();
@@ -308,14 +403,29 @@ export const useStore = create<ExchangeState>()(
       },
       
       fetchInitialData: async () => {
-        // Data is now loaded instantly from localStorage via persist middleware
-        // This function is kept for API compatibility, but we just make sure isLoading is false
+        set({ isLoading: true });
+
+        try {
+          const response = await fetch('/api/bootstrap');
+          const data = await readJsonResponse<SharedServerState>(response);
+
+          if (response.ok && data) {
+            set({
+              ...data,
+              isLoading: false,
+            });
+            return;
+          }
+        } catch (error) {
+          console.error('Failed to fetch initial shared data', error);
+        }
+
         set({ isLoading: false });
       }
     }),
     {
       name: 'cryptobull-storage',
-      version: 8,
+      version: 9,
       // Persist core admin and order data, reset user inputs on reload
       partialize: (state) => ({
         cities: state.cities,
@@ -367,6 +477,7 @@ export const useStore = create<ExchangeState>()(
             return {
               ...city,
               cityKey: legacyCity.cityKey ?? LEGACY_CITY_NAME_TO_KEY[legacyCity.name ?? ''] ?? 'berlin',
+              groupChatId: legacyCity.groupChatId ?? '',
             };
           }),
         } satisfies ExchangeState;

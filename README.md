@@ -29,6 +29,7 @@ Telegram Mini App для обмена `EUR ⇄ USDT` с premium dark UI, руч�
 ```env
 BOT_TOKEN=1234567890:your_bot_token
 CHAT_ID=-1001234567890
+PUBLIC_BASE_URL=https://your-render-domain.onrender.com
 REQUIRE_TELEGRAM_INIT=false
 ADMIN_IDS=123456789,987654321
 VITE_ADMIN_IDS=123456789,987654321
@@ -45,6 +46,28 @@ npm run dev
 
 - Vite-клиент
 - Node/Express backend на `http://localhost:3001`
+
+## Простая схема по городам
+
+- У каждого города в админке есть свой `Telegram group chat id`
+- Если у города задан свой `groupChatId`, заявка уходит именно в эту группу
+- Если поле пустое, используется общий `CHAT_ID`
+- Под каждой заявкой бот добавляет кнопки:
+- `В работу`
+- `Готово`
+- `Отклонить`
+- Нажатие кнопки в группе обновляет статус заявки и синхронизирует его в приложении
+
+## Telegram webhook
+
+- Для работы кнопок в группах нужен публичный `PUBLIC_BASE_URL`
+- После деплоя можно вызвать:
+
+```bash
+curl -X POST https://your-render-domain.onrender.com/api/telegram/set-webhook
+```
+
+- Либо сервер сам попытается установить webhook при старте, если заданы `BOT_TOKEN` и `PUBLIC_BASE_URL`
 
 ## Проверка
 

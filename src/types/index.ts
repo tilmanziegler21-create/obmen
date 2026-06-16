@@ -7,6 +7,7 @@ export interface City {
   cityKey: string;
   isActive: boolean;
   limitEUR: number;
+  groupChatId: string;
 }
 
 export interface Rates {
@@ -35,6 +36,8 @@ export interface ExchangeOrder {
   commissionPercent: number;
   discountPercent: number;
   referralCodeUsed: string | null;
+  telegramChatId?: string | null;
+  telegramMessageId?: number | null;
   status: OrderStatus;
 }
 
@@ -85,15 +88,16 @@ export interface ExchangeState {
   getAmount: string;
   
   // Admin Actions
-  updateCityLimit: (id: string, limit: number) => void;
-  updateUsdtReserve: (amount: number) => void;
-  updateRate: (rate: number) => void;
-  updateAntiPhishingCode: (code: string) => void;
+  updateCityLimit: (id: string, limit: number) => Promise<void>;
+  updateCityGroupChatId: (id: string, groupChatId: string) => Promise<void>;
+  updateUsdtReserve: (amount: number) => Promise<void>;
+  updateRate: (rate: number) => Promise<void>;
+  updateAntiPhishingCode: (code: string) => Promise<void>;
   updateProfileSettings: (settings: Partial<ProfileSettings>) => void;
   setCommissionPercent: (value: number) => void;
   addReview: (review: Omit<Review, 'id' | 'createdAt'>) => void;
   removeReview: (id: string) => void;
-  toggleCityActive: (id: string) => void;
+  toggleCityActive: (id: string) => Promise<void>;
   setCity: (id: string) => void;
   setDirection: (dir: ExchangeDirection) => void;
   setGiveAmount: (amount: string) => void;
@@ -103,7 +107,7 @@ export interface ExchangeState {
   calculateGetAmount: () => void;
   calculateGiveAmount: () => void;
   createOrder: (order: Omit<ExchangeOrder, 'id' | 'createdAt' | 'status'>) => ExchangeOrder;
-  updateOrderStatus: (id: string, status: OrderStatus) => void;
-  updateOrderManager: (id: string, managerName: string | null) => void;
+  updateOrderStatus: (id: string, status: OrderStatus) => Promise<void>;
+  updateOrderManager: (id: string, managerName: string | null) => Promise<void>;
   fetchInitialData: () => Promise<void>;
 }

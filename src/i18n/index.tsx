@@ -181,6 +181,8 @@ const dictionaries: Record<Language, TranslationDictionary> = {
       eurOnly: 'EUR Only',
       active: 'Активен',
       disabled: 'Отключен',
+      cityGroupPlaceholder: 'ID Telegram-группы, например -1001234567890',
+      cityGroupHint: 'Если код группы заполнен, заявки этого города уходят именно туда. Кнопки под сообщением меняют статус заявки.',
       save: 'Сохранить',
     },
     profile: {
@@ -430,6 +432,8 @@ const dictionaries: Record<Language, TranslationDictionary> = {
       eurOnly: 'EUR Only',
       active: 'Active',
       disabled: 'Disabled',
+      cityGroupPlaceholder: 'Telegram group ID, for example -1001234567890',
+      cityGroupHint: 'If a group ID is set, this city sends requests there. Buttons under the message change the order status.',
       save: 'Save',
     },
     profile: {
@@ -679,6 +683,8 @@ const dictionaries: Record<Language, TranslationDictionary> = {
       eurOnly: 'EUR Only',
       active: 'Активний',
       disabled: 'Вимкнений',
+      cityGroupPlaceholder: 'ID Telegram-групи, наприклад -1001234567890',
+      cityGroupHint: 'Якщо код групи заповнений, заявки цього міста йдуть саме туди. Кнопки під повідомленням змінюють статус заявки.',
       save: 'Зберегти',
     },
     profile: {
@@ -928,6 +934,8 @@ const dictionaries: Record<Language, TranslationDictionary> = {
       eurOnly: 'EUR Only',
       active: 'Aktiv',
       disabled: 'Deaktiviert',
+      cityGroupPlaceholder: 'Telegram-Gruppen-ID, zum Beispiel -1001234567890',
+      cityGroupHint: 'Wenn eine Gruppen-ID gesetzt ist, gehen die Anfragen dieser Stadt genau dorthin. Die Buttons unter der Nachricht andern den Status.',
       save: 'Speichern',
     },
     profile: {

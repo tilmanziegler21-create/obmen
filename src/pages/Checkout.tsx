@@ -16,7 +16,7 @@ export default function Checkout() {
   const telegramUserId = WebApp.initDataUnsafe?.user?.id ?? null;
   const { 
     cities, selectedCityId, direction, rates, usdtReserve, antiPhishingCode, checkoutPrefill, orders, profileSettings,
-    giveAmount, getAmount, createOrder, clearCheckoutPrefill, setCommissionPercent
+    giveAmount, getAmount, clearCheckoutPrefill, setCommissionPercent, fetchInitialData
   } = useStore();
   const NETWORKS = [
     { id: 'TRC-20', label: 'TRC-20', time: t('checkout.networkTimes.trc20') },
@@ -81,6 +81,7 @@ export default function Checkout() {
           telegramInitData,
           order: {
             direction,
+            cityId: city?.id ?? '',
             city: cityName,
             cityKey: city?.cityKey ?? 'berlin',
             giveAmount,
@@ -114,7 +115,24 @@ export default function Checkout() {
         return;
       }
 
+      if (responseData?.state) {
+        await fetchInitialData();
+      }
+
+      const createdOrder = responseData?.createdOrder;
       isSentSuccessfully = true;
+
+      setTimeout(() => {
+        WebApp.HapticFeedback.notificationOccurred('success');
+        clearCheckoutPrefill();
+        setCreatedOrderId(createdOrder?.id ?? null);
+        setIsSuccess(true);
+        setIsSubmitting(false);
+        
+        setTimeout(() => {
+          WebApp.close();
+        }, 2000);
+      }, 300);
     } catch (e) {
       console.error('Ошибка при отправке в backend:', e);
       setSubmitError(
@@ -125,40 +143,9 @@ export default function Checkout() {
       setIsSubmitting(false);
       return;
     }
-    
-    if (isSentSuccessfully) {
-      const createdOrder = createOrder({
-        direction,
-        cityId: city?.id ?? '',
-        cityKey: city?.cityKey ?? 'berlin',
-        giveAmount,
-        giveCurrency: direction === 'GIVE_CASH' ? 'EUR' : 'USDT',
-        getAmount,
-        getCurrency: direction === 'GIVE_CASH' ? 'USDT' : 'EUR',
-        rate: effectiveRate.toFixed(4),
-        network: isGettingUSDT ? network : null,
-        wallet: isGettingUSDT ? wallet : null,
-        contact: !isGettingUSDT ? contact : null,
-        userHandle,
-        managerName: null,
-        antiPhishingCode,
-        commissionPercent: benefits.effectiveCommissionPercent,
-        discountPercent: benefits.totalDiscountPercent,
-        referralCodeUsed: benefits.hasReferralActivated ? profileSettings.activatedReferralCode : null,
-      });
 
-      setTimeout(() => {
-        WebApp.HapticFeedback.notificationOccurred('success');
-        clearCheckoutPrefill();
-        setCreatedOrderId(createdOrder.id);
-        setIsSuccess(true);
-        setIsSubmitting(false);
-        
-        // Close WebApp after 2 seconds
-        setTimeout(() => {
-          WebApp.close();
-        }, 2000);
-      }, 300);
+    if (!isSentSuccessfully) {
+      setIsSubmitting(false);
     }
   };
   

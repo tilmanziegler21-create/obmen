@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useStore } from '../store';
@@ -19,6 +19,7 @@ export default function Admin() {
     antiPhishingCode,
     profileSettings,
     updateCityLimit,
+    updateCityGroupChatId,
     updateUsdtReserve,
     updateRate,
     updateAntiPhishingCode,
@@ -38,6 +39,9 @@ export default function Admin() {
   const [editLimits, setEditLimits] = useState<Record<string, string>>(
     cities.reduce((acc, city) => ({ ...acc, [city.id]: city.limitEUR.toString() }), {})
   );
+  const [editGroupChatIds, setEditGroupChatIds] = useState<Record<string, string>>(
+    cities.reduce((acc, city) => ({ ...acc, [city.id]: city.groupChatId ?? '' }), {}),
+  );
   const [editRate, setEditRate] = useState(rates.EUR_USDT.toString());
   const [editUsdtReserve, setEditUsdtReserve] = useState(usdtReserve.toString());
   const [editAntiPhishingCode, setEditAntiPhishingCode] = useState(antiPhishingCode);
@@ -49,6 +53,16 @@ export default function Admin() {
   const [cityFilter, setCityFilter] = useState<'all' | string>('all');
   const [directionFilter, setDirectionFilter] = useState<'all' | ExchangeDirection>('all');
   const [onlyMyOrders, setOnlyMyOrders] = useState(false);
+
+  useEffect(() => {
+    setEditLimits(cities.reduce((acc, city) => ({ ...acc, [city.id]: city.limitEUR.toString() }), {}));
+    setEditGroupChatIds(cities.reduce((acc, city) => ({ ...acc, [city.id]: city.groupChatId ?? '' }), {}));
+  }, [cities]);
+
+  useEffect(() => {
+    setEditManagers(orders.reduce((acc, order) => ({ ...acc, [order.id]: order.managerName ?? '' }), {}));
+  }, [orders]);
+
   const formattedRateUpdatedAt = useMemo(
     () => new Date(rateUpdatedAt).toLocaleString(language),
     [language, rateUpdatedAt],
@@ -129,21 +143,26 @@ export default function Admin() {
     navigate('/');
   };
 
-  const handleSave = (id: string) => {
+  const handleSave = async (id: string) => {
     WebApp.HapticFeedback.impactOccurred('medium');
     const newLimit = Number(editLimits[id]) || 0;
-    updateCityLimit(id, newLimit);
+    await updateCityLimit(id, newLimit);
   };
 
-  const handleToggle = (id: string) => {
-    WebApp.HapticFeedback.selectionChanged();
-    toggleCityActive(id);
-  };
-
-  const handleClaimOrder = (orderId: string) => {
+  const handleSaveGroupChatId = async (id: string) => {
     WebApp.HapticFeedback.impactOccurred('medium');
-    updateOrderManager(orderId, managerSelfName);
-    updateOrderStatus(orderId, 'processing');
+    await updateCityGroupChatId(id, editGroupChatIds[id] ?? '');
+  };
+
+  const handleToggle = async (id: string) => {
+    WebApp.HapticFeedback.selectionChanged();
+    await toggleCityActive(id);
+  };
+
+  const handleClaimOrder = async (orderId: string) => {
+    WebApp.HapticFeedback.impactOccurred('medium');
+    await updateOrderManager(orderId, managerSelfName);
+    await updateOrderStatus(orderId, 'processing');
     setEditManagers((prev) => ({ ...prev, [orderId]: managerSelfName }));
   };
 
@@ -209,6 +228,28 @@ export default function Admin() {
                   </button>
                 </div>
 
+                <div className="mt-[10px] flex flex-col gap-[8px] min-[360px]:flex-row min-[360px]:items-center">
+                  <input
+                    type="text"
+                    value={editGroupChatIds[city.id] ?? ''}
+                    onChange={(e) =>
+                      setEditGroupChatIds((prev) => ({ ...prev, [city.id]: e.target.value }))
+                    }
+                    placeholder={t('admin.cityGroupPlaceholder')}
+                    className="w-full flex-1 bg-bg2 border border-border2 rounded-[8px] py-[10px] px-[12px] text-[13px] font-mono text-text outline-none focus:border-[#4F8EF7] transition-colors placeholder:text-dim"
+                  />
+                  <button
+                    onClick={() => handleSaveGroupChatId(city.id)}
+                    className="bg-bg2 border border-border2 hover:border-[#4F8EF7] hover:text-[#4F8EF7] text-muted px-[16px] py-[10px] rounded-[8px] text-[12px] font-[600] transition-colors"
+                  >
+                    {t('admin.save')}
+                  </button>
+                </div>
+
+                <div className="mt-[8px] text-[11px] font-[500] text-dim">
+                  {t('admin.cityGroupHint')}
+                </div>
+
               </div>
             ))}
           </div>
@@ -239,7 +280,7 @@ export default function Admin() {
                 />
               </div>
               <button
-                onClick={() => updateRate(Number(editRate) || rates.EUR_USDT)}
+                onClick={() => void updateRate(Number(editRate) || rates.EUR_USDT)}
                 className="bg-bg3 border border-border2 hover:border-[#4F8EF7] hover:text-[#4F8EF7] text-muted px-[16px] py-[10px] rounded-[8px] text-[12px] font-[600] transition-colors"
               >
                 {t('admin.save')}
@@ -276,7 +317,7 @@ export default function Admin() {
               />
             </div>
             <button
-              onClick={() => updateUsdtReserve(Number(editUsdtReserve) || 0)}
+              onClick={() => void updateUsdtReserve(Number(editUsdtReserve) || 0)}
               className="bg-bg3 border border-border2 hover:border-usdt hover:text-usdt text-muted px-[16px] py-[10px] rounded-[8px] text-[12px] font-[600] transition-colors"
             >
               {t('admin.save')}
@@ -311,7 +352,7 @@ export default function Admin() {
             />
             <button
               type="button"
-              onClick={() => updateAntiPhishingCode(editAntiPhishingCode)}
+              onClick={() => void updateAntiPhishingCode(editAntiPhishingCode)}
               className="rounded-[10px] border border-border2 bg-bg3 px-[14px] py-[10px] text-[11px] font-[700] uppercase tracking-[0.05em] text-muted transition-colors hover:border-green hover:text-green"
             >
               {t('admin.save')}
@@ -512,7 +553,7 @@ export default function Admin() {
                       />
                       <button
                         type="button"
-                        onClick={() => updateOrderManager(order.id, editManagers[order.id] ?? '')}
+                        onClick={() => void updateOrderManager(order.id, editManagers[order.id] ?? '')}
                         className="rounded-[10px] border border-border2 bg-bg3 px-[14px] py-[10px] text-[11px] font-[700] uppercase tracking-[0.05em] text-muted transition-colors hover:border-green hover:text-green"
                       >
                         {t('admin.save')}
@@ -534,7 +575,7 @@ export default function Admin() {
                       <button
                         key={status}
                         type="button"
-                        onClick={() => updateOrderStatus(order.id, status)}
+                        onClick={() => void updateOrderStatus(order.id, status)}
                         className={`rounded-[10px] border px-[10px] py-[10px] text-[11px] font-[700] uppercase tracking-[0.05em] transition-colors ${
                           order.status === status
                             ? 'border-green bg-[rgba(0,208,132,0.1)] text-green'
