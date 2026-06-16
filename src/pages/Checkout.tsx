@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useStore } from '../store';
-import { CheckCircle2 } from 'lucide-react';
 import WebApp from '@twa-dev/sdk';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useI18n } from '../i18n';
@@ -29,10 +28,8 @@ export default function Checkout() {
   const [network, setNetwork] = useState(
     NETWORKS.some((item) => item.id === checkoutPrefill.network) ? checkoutPrefill.network : NETWORKS[0].id,
   );
-  const [isSuccess, setIsSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
   const userHandle = WebApp.initDataUnsafe?.user?.username 
     ? `@${WebApp.initDataUnsafe.user.username}` 
     : (WebApp.initDataUnsafe?.user?.first_name || t('checkout.unknownUser'));
@@ -125,13 +122,14 @@ export default function Checkout() {
       setTimeout(() => {
         WebApp.HapticFeedback.notificationOccurred('success');
         clearCheckoutPrefill();
-        setCreatedOrderId(createdOrder?.id ?? null);
-        setIsSuccess(true);
         setIsSubmitting(false);
-        
-        setTimeout(() => {
-          WebApp.close();
-        }, 2000);
+
+        navigate('/orders', {
+          state: {
+            orderId: createdOrder?.id ?? null,
+            justCreated: true,
+          },
+        });
       }, 300);
     } catch (e) {
       console.error('Ошибка при отправке в backend:', e);
@@ -160,31 +158,6 @@ export default function Checkout() {
   useEffect(() => {
     setCommissionPercent(benefits.effectiveCommissionPercent);
   }, [benefits.effectiveCommissionPercent, setCommissionPercent]);
-
-  if (isSuccess) {
-    return (
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="flex-1 flex flex-col items-center justify-center p-[24px] space-y-[24px] text-center"
-      >
-        <div className="w-[96px] h-[96px] bg-green2 rounded-full flex items-center justify-center border border-green3">
-          <CheckCircle2 size={48} className="text-green" />
-        </div>
-        <h1 className="text-[28px] font-[800] text-green">{t('checkout.successTitle')}</h1>
-        {createdOrderId && (
-          <div className="rounded-r border border-green3 bg-green2 px-[12px] py-[8px] text-[12px] font-[700] text-green">
-            {t('home.orderNumber', { id: createdOrderId })}
-          </div>
-        )}
-        <p className="text-[14px] text-muted font-[500]">
-          {direction === 'GIVE_CASH' 
-            ? t('checkout.successCash') 
-            : t('checkout.successUsdt')}
-        </p>
-      </motion.div>
-    );
-  }
 
   return (
     <motion.div 

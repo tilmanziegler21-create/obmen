@@ -5,7 +5,7 @@ import WebApp from '@twa-dev/sdk';
 import { useNavigate } from 'react-router-dom';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useI18n } from '../i18n';
-import { calculateCustomerMetrics, generateReferralCode, getCustomerBenefits, getLoyaltyTier } from '../lib/customer';
+import { calculateCustomerMetrics, generateReferralCode, getCustomerBenefits } from '../lib/customer';
 
 const CITY_FLAGS: Record<string, string> = {
   berlin: '🇩🇪',
@@ -27,16 +27,14 @@ export default function Home() {
   const navigate = useNavigate();
   const { t, language } = useI18n();
   const { 
-    cities, selectedCityId, direction, rates, rateUpdatedAt, orders, usdtReserve, antiPhishingCode, profileSettings, reviews,
+    cities, selectedCityId, direction, rates, rateUpdatedAt, orders, usdtReserve, profileSettings,
     setCity, setDirection, giveAmount, getAmount, setGiveAmount, applyOrderTemplate, clearCheckoutPrefill, updateProfileSettings, setCommissionPercent
   } = useStore();
 
   const user = WebApp.initDataUnsafe?.user;
   const [citySearch, setCitySearch] = useState('');
-  const [referralInput, setReferralInput] = useState(profileSettings.activatedReferralCode);
   const currentUserHandle = user?.username ? `@${user.username}` : (user?.first_name || t('checkout.unknownUser'));
   
-  // Get admin IDs from environment variables (comma separated string)
   const adminIds = (import.meta.env.VITE_ADMIN_IDS || '').split(',').map((id: string) => id.trim());
   const isAdmin = user?.id ? adminIds.includes(user.id.toString()) : false;
 
@@ -50,10 +48,6 @@ export default function Home() {
     return cities.filter((city) => t(`cities.${city.cityKey}`).toLowerCase().includes(query));
   }, [cities, citySearch, t]);
 
-  const activeOrders = useMemo(
-    () => orders.filter((order) => order.status === 'accepted' || order.status === 'processing'),
-    [orders],
-  );
   const currentUserOrders = useMemo(
     () => orders.filter((order) => order.userHandle === currentUserHandle),
     [currentUserHandle, orders],
@@ -66,33 +60,15 @@ export default function Home() {
     () => getCustomerBenefits(metrics, profileSettings.activatedReferralCode),
     [metrics, profileSettings.activatedReferralCode],
   );
-  const currentUserStats = useMemo(
-    () =>
-      metrics.deals > 0
-        ? {
-            deals: metrics.deals,
-            volumeEUR: metrics.volumeEUR,
-            firstOrderAt: metrics.firstOrderAt as string,
-          }
-        : null,
-    [metrics],
-  );
-  const loyaltyTier = useMemo(() => getLoyaltyTier(metrics), [metrics]);
   const assignedManagerOrder = useMemo(
     () => currentUserOrders.find((order) => order.managerName && order.status !== 'rejected') ?? null,
     [currentUserOrders],
   );
-  const latestReviews = useMemo(() => reviews.slice(0, 3), [reviews]);
-  const hasActivatedReferral = profileSettings.activatedReferralCode.trim().length > 0;
-  const canActivateReferral = metrics.deals === 0 && !hasActivatedReferral;
+  const latestUserOrder = currentUserOrders[0] ?? null;
 
   useEffect(() => {
     setCommissionPercent(benefits.effectiveCommissionPercent);
   }, [benefits.effectiveCommissionPercent, setCommissionPercent]);
-
-  useEffect(() => {
-    setReferralInput(profileSettings.activatedReferralCode);
-  }, [profileSettings.activatedReferralCode]);
 
   useEffect(() => {
     const expectedReferralCode = generateReferralCode(currentUserHandle);
@@ -101,23 +77,17 @@ export default function Home() {
     }
   }, [currentUserHandle, profileSettings.referralCode, updateProfileSettings]);
 
-  const estimatedQueueMinutes = activeOrders.length > 0 ? Math.max(5, Math.round(activeOrders.length * 7.5)) : 0;
-  const recentOrders = orders.slice(0, 3);
-  const latestOrder = orders[0] ?? null;
   const currentCity = cities.find((city) => city.id === selectedCityId) ?? null;
 
   const eurAmount = direction === 'GIVE_CASH' ? Number(giveAmount) : Number(getAmount);
   const usdtAmount = direction === 'GIVE_CASH' ? Number(getAmount) : Number(giveAmount);
   
-  // Strict 500 EUR limit logic
   const isOverLimit = eurAmount > 500;
   const isCityMissing = !currentCity;
   const isCityInactive = currentCity ? !currentCity.isActive : false;
   const isCashReserveInsufficient = direction === 'GIVE_USDT' ? (currentCity ? eurAmount > currentCity.limitEUR : false) : false;
   const isUsdtReserveInsufficient = direction === 'GIVE_CASH' ? usdtAmount > usdtReserve : false;
   
-  // EUR is now automatically rounded to nearest 10 in the store when getting cash,
-  // but if user manually inputs EUR to give, we should warn them.
   const isEurInvalid = direction === 'GIVE_CASH' && (eurAmount % 10 !== 0 || eurAmount % 1 !== 0);
   const isReserveBlocked = isCityMissing || isCityInactive || isCashReserveInsufficient || isUsdtReserveInsufficient;
   const isValid = Number(giveAmount) > 0 && !isOverLimit && !isReserveBlocked && (!isEurInvalid || eurAmount === 0);
@@ -137,6 +107,7 @@ export default function Home() {
     hour: '2-digit',
     minute: '2-digit',
   });
+  const selectedCityReserve = currentCity ? currentCity.limitEUR : 0;
 
   const handleNext = () => {
     if (isValid) {
@@ -144,16 +115,6 @@ export default function Home() {
       clearCheckoutPrefill();
       navigate('/checkout');
     }
-  };
-
-  const handleActivateReferral = () => {
-    const normalized = referralInput.trim().toUpperCase();
-    if (!canActivateReferral || !normalized || normalized === profileSettings.referralCode) {
-      return;
-    }
-
-    WebApp.HapticFeedback.notificationOccurred('success');
-    updateProfileSettings({ activatedReferralCode: normalized });
   };
 
   const setAmount = (val: number) => {
@@ -167,13 +128,31 @@ export default function Home() {
     navigate('/checkout');
   };
 
+  const handleOpenManagerContact = () => {
+    const rawValue = profileSettings.managerContact.trim();
+    if (!rawValue) {
+      return;
+    }
+
+    const normalizedValue = rawValue
+      .replace(/^https?:\/\/t\.me\//, '')
+      .replace(/^@/, '')
+      .trim();
+
+    if (!normalizedValue) {
+      return;
+    }
+
+    WebApp.HapticFeedback.impactOccurred('light');
+    WebApp.openTelegramLink(`https://t.me/${normalizedValue}`);
+  };
+
   return (
     <motion.div 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       className="flex-1 flex flex-col"
     >
-      {/* Header */}
       <header
         className="relative z-10 flex items-start justify-between gap-[12px] border-b border-border px-[16px] pb-[16px] pt-[16px]"
         style={{ paddingTop: 'max(16px, env(safe-area-inset-top))' }}
@@ -214,7 +193,72 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Mode Selection */}
+      <div className="relative z-10 mx-[16px] mt-[12px] grid grid-cols-2 gap-[8px]">
+        <button
+          type="button"
+          onClick={() => navigate('/orders')}
+          className="rounded-r border border-border2 bg-bg2 px-[14px] py-[12px] text-[12px] font-[700] uppercase tracking-[0.05em] text-text transition-colors hover:border-green hover:text-green"
+        >
+          {t('home.myOrdersAction')}
+        </button>
+        {isAdmin ? (
+          <button
+            type="button"
+            onClick={() => navigate('/admin')}
+            className="rounded-r border border-green3 bg-green2 px-[14px] py-[12px] text-[12px] font-[700] uppercase tracking-[0.05em] text-green transition-colors hover:border-green"
+          >
+            {t('home.adminShortAction')}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => navigate('/profile')}
+            className="rounded-r border border-border2 bg-bg2 px-[14px] py-[12px] text-[12px] font-[700] uppercase tracking-[0.05em] text-text transition-colors hover:border-green hover:text-green"
+          >
+            {t('home.profileAction')}
+          </button>
+        )}
+      </div>
+
+      {latestUserOrder && (
+        <div className="relative z-10 mx-[16px] mt-[12px] rounded-r2 border border-border2 bg-bg2 p-[16px]">
+          <div className="flex items-center justify-between gap-[8px]">
+            <div>
+              <div className="text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.latestOrderTitle')}</div>
+              <div className="mt-[6px] text-[14px] font-[700] text-text">{t('home.orderNumber', { id: latestUserOrder.id })}</div>
+            </div>
+            <div className="rounded-[6px] bg-green2 px-[8px] py-[4px] text-[10px] font-[700] uppercase tracking-[0.06em] text-green">
+              {t(`orderStatus.${latestUserOrder.status}`)}
+            </div>
+          </div>
+          <div className="mt-[8px] text-[12px] font-[500] text-muted">
+            {t(`cities.${latestUserOrder.cityKey}`)} · {latestUserOrder.giveAmount} {latestUserOrder.giveCurrency} {'->'} {latestUserOrder.getAmount} {latestUserOrder.getCurrency}
+          </div>
+          <div className="mt-[6px] text-[11px] font-[500] text-dim">
+            {latestUserOrder.managerName
+              ? t('admin.managerAssigned', { name: latestUserOrder.managerName })
+              : t('home.orderPendingManager')}
+          </div>
+          <div className="mt-[12px] grid grid-cols-2 gap-[8px]">
+            <button
+              type="button"
+              onClick={() => navigate('/orders')}
+              className="rounded-r border border-border2 bg-bg3 px-[12px] py-[11px] text-[11px] font-[700] uppercase tracking-[0.05em] text-text transition-colors hover:border-green hover:text-green"
+            >
+              {t('home.openOrderHistory')}
+            </button>
+            <button
+              type="button"
+              onClick={handleOpenManagerContact}
+              disabled={!profileSettings.managerContact.trim()}
+              className="rounded-r border border-green3 bg-green2 px-[12px] py-[11px] text-[11px] font-[700] uppercase tracking-[0.05em] text-green transition-colors hover:border-green disabled:opacity-50"
+            >
+              {t('home.contactManager')}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="relative z-10 text-[10px] font-[600] tracking-[0.14em] uppercase text-muted px-[20px] pt-[18px] pb-[10px]">{t('home.actionTitle')}</div>
       <div className="relative z-10 px-[16px] pt-[16px] pb-0">
         <div className="grid grid-cols-1 gap-[8px] min-[360px]:grid-cols-2">
@@ -271,7 +315,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Rate Banner */}
       <div className="relative z-10 m-[12px_16px_0] rounded-r border border-border bg-bg2 p-[12px_16px]">
         <div className="flex min-w-0 items-center gap-[8px]">
           <div className="flex min-w-0 items-center gap-[8px]">
@@ -286,115 +329,6 @@ export default function Home() {
               <div className="mt-[1px] break-words font-mono text-[13px] font-[600] text-text min-[360px]:text-[14px]">1 EUR = {currentRate.toFixed(4)} USDT</div>
             <div className="mt-[4px] text-[10px] font-[500] text-dim">{t('home.rateUpdated', { time: formattedRateUpdatedAt })}</div>
             </div>
-          </div>
-        </div>
-      </div>
-
-      {isAdmin && (
-        <div className="relative z-10 mx-[16px] mt-[12px]">
-          <button
-            type="button"
-            onClick={() => navigate('/admin')}
-            className="w-full rounded-r2 border border-green3 bg-green2 px-[16px] py-[14px] text-[13px] font-[700] uppercase tracking-[0.05em] text-green transition-colors hover:border-green"
-          >
-            {t('home.adminPanelAction', { count: activeOrders.length })}
-          </button>
-        </div>
-      )}
-
-      <div className="relative z-10 mx-[16px] mt-[12px] rounded-r2 border border-border2 bg-bg2 p-[16px]">
-        <div className="mb-[10px] text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.clientCardTitle')}</div>
-        {currentUserStats ? (
-          <div className="grid grid-cols-1 gap-[8px] min-[360px]:grid-cols-3">
-            <div className="rounded-r border border-border bg-bg3 p-[12px]">
-              <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-muted">{t('home.clientDeals')}</div>
-              <div className="mt-[6px] font-mono text-[18px] font-[700] text-text">{currentUserStats.deals}</div>
-            </div>
-            <div className="rounded-r border border-border bg-bg3 p-[12px]">
-              <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-muted">{t('home.clientVolume')}</div>
-              <div className="mt-[6px] font-mono text-[18px] font-[700] text-text">{currentUserStats.volumeEUR.toFixed(0)}€</div>
-            </div>
-            <div className="rounded-r border border-border bg-bg3 p-[12px]">
-              <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-muted">{t('home.clientSince')}</div>
-              <div className="mt-[6px] text-[12px] font-[700] text-text">
-                {new Date(currentUserStats.firstOrderAt).toLocaleDateString(language, { month: 'short', year: 'numeric' })}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="text-[13px] font-[500] text-muted">{t('home.clientCardEmpty')}</div>
-        )}
-      </div>
-
-      <div className="relative z-10 mx-[16px] mt-[12px] rounded-r2 border border-border2 bg-bg2 p-[16px]">
-        <div className="mb-[10px] flex items-center justify-between gap-[8px]">
-          <div className="text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.loyaltyTitle')}</div>
-          <div className="rounded-[6px] bg-green2 px-[8px] py-[4px] text-[10px] font-[700] uppercase tracking-[0.06em] text-green">
-            {t(`loyalty.${loyaltyTier}`)}
-          </div>
-        </div>
-        <div className="grid grid-cols-1 gap-[8px] min-[360px]:grid-cols-3">
-          <div className="rounded-r border border-border bg-bg3 p-[12px]">
-            <div className="text-[10px] font-[600] uppercase tracking-[0.05em] text-muted">{t('home.discountLabel')}</div>
-            <div className="mt-[6px] font-mono text-[18px] font-[700] text-text">{benefits.totalDiscountPercent.toFixed(1)}%</div>
-          </div>
-          <div className="rounded-r border border-border bg-bg3 p-[12px]">
-            <div className="text-[10px] font-[600] uppercase tracking-[0.05em] text-muted">{t('home.commissionLabel')}</div>
-            <div className="mt-[6px] font-mono text-[18px] font-[700] text-text">{benefits.effectiveCommissionPercent.toFixed(1)}%</div>
-          </div>
-          <div className="rounded-r border border-border bg-bg3 p-[12px]">
-            <div className="text-[10px] font-[600] uppercase tracking-[0.05em] text-muted">{t('home.referralLabel')}</div>
-            <div className="mt-[6px] text-[12px] font-[700] text-text">
-              {benefits.isReferralFirstDeal
-                ? t('home.referralFirstDeal')
-                : benefits.hasReferralActivated
-                  ? t('home.referralActive')
-                  : t('home.referralInactive')}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="relative z-10 mx-[16px] mt-[12px] rounded-r2 border border-border2 bg-bg2 p-[16px]">
-        <div className="mb-[10px] text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.referralProgramTitle')}</div>
-        <div className="rounded-r border border-border bg-bg3 p-[12px]">
-          <div className="text-[10px] font-[600] uppercase tracking-[0.05em] text-muted">{t('home.myReferralCode')}</div>
-          <div className="mt-[6px] font-mono text-[18px] font-[700] tracking-[0.08em] text-text">{profileSettings.referralCode}</div>
-          <div className="mt-[4px] text-[11px] font-[500] text-dim">{t('home.referralHint')}</div>
-        </div>
-        <div className="mt-[10px] flex flex-col gap-[8px] min-[360px]:flex-row min-[360px]:items-center">
-          <input
-            type="text"
-            value={referralInput}
-            onChange={(e) => setReferralInput(e.target.value.toUpperCase())}
-            placeholder={t('home.referralInputPlaceholder')}
-            disabled={!canActivateReferral}
-            className="w-full flex-1 rounded-r border border-border bg-bg3 px-[12px] py-[12px] text-[13px] font-mono uppercase tracking-[0.06em] text-text outline-none transition-colors placeholder:text-dim focus:border-green"
-          />
-          <button
-            type="button"
-            onClick={handleActivateReferral}
-            disabled={!canActivateReferral || !referralInput.trim() || referralInput.trim().toUpperCase() === profileSettings.referralCode}
-            className="rounded-r border border-green3 bg-green2 px-[14px] py-[12px] text-[11px] font-[700] uppercase tracking-[0.05em] text-green transition-colors hover:border-green"
-          >
-            {t('home.activateReferral')}
-          </button>
-        </div>
-        <div className="mt-[8px] text-[11px] font-[500] text-dim">
-          {benefits.hasReferralActivated
-            ? t('home.referralActivated', { code: profileSettings.activatedReferralCode })
-            : canActivateReferral
-              ? t('home.referralFirstDeal')
-              : t('home.referralLocked')}
-        </div>
-      </div>
-
-      <div className="relative z-10 mx-[16px] mt-[12px] rounded-r2 border border-green3 bg-green2 p-[14px]">
-        <div className="text-[11px] font-[600] uppercase tracking-[0.08em] text-green">{t('home.securityCodeTitle')}</div>
-        <div className="mt-[6px] flex flex-col gap-[4px] min-[360px]:flex-row min-[360px]:items-center min-[360px]:justify-between">
-          <div className="text-[12px] font-[500] leading-relaxed text-text">{t('home.securityCodeHint')}</div>
-          <div className="self-start rounded-[8px] border border-green3 bg-[rgba(10,11,15,0.35)] px-[10px] py-[6px] font-mono text-[13px] font-[700] tracking-[0.12em] text-green">
-            {antiPhishingCode}
           </div>
         </div>
       </div>
@@ -427,11 +361,18 @@ export default function Home() {
                 </div>
               </div>
             </div>
+            <button
+              type="button"
+              onClick={handleOpenManagerContact}
+              disabled={!profileSettings.managerContact.trim()}
+              className="mt-[12px] w-full rounded-r border border-green3 bg-green2 px-[14px] py-[12px] text-[12px] font-[700] uppercase tracking-[0.05em] text-green transition-colors hover:border-green disabled:opacity-50"
+            >
+              {t('home.contactManager')}
+            </button>
           </div>
         </div>
       )}
 
-      {/* Amount Input */}
       <div className="relative z-10 text-[10px] font-[600] tracking-[0.14em] uppercase text-muted px-[20px] pt-[18px] pb-[10px]">{t('home.amountTitle')}</div>
       <div className="relative z-10 mx-[16px]">
         <div className="bg-bg2 border-[1.5px] border-border2 rounded-r2 p-[18px_18px_14px] transition-colors focus-within:border-green">
@@ -482,7 +423,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Divider */}
       <div className="relative z-10 flex justify-center py-[8px]">
         <div className="w-[36px] h-[36px] rounded-full bg-bg3 border border-border2 flex items-center justify-center text-muted">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -491,7 +431,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Get Card */}
       <div className="relative z-10 mx-[16px] bg-bg2 border border-border rounded-r2 p-[16px_18px]">
         <div className="flex items-center justify-between mb-[10px]">
           <div className="flex items-center gap-[8px] text-[13px] font-[700] text-text">
@@ -512,65 +451,23 @@ export default function Home() {
       </div>
 
       <div className="relative z-10 mx-[16px] mt-[12px] rounded-r2 border border-border2 bg-bg2 p-[16px]">
-        <div className="mb-[12px] text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.quickExchangeTitle')}</div>
-        {latestOrder ? (
-          <div className="rounded-r border border-border bg-bg3 p-[14px]">
-            <div className="mb-[6px] flex items-center justify-between gap-[10px]">
-              <div className="text-[13px] font-[700] text-text">{t('home.repeatLastDeal')}</div>
-              <div className="rounded-[6px] bg-[rgba(0,208,132,0.1)] px-[8px] py-[4px] text-[10px] font-[700] uppercase tracking-[0.06em] text-green">
-                {t(`orderStatus.${latestOrder.status}`)}
-              </div>
-            </div>
-            <div className="text-[12px] font-[500] text-muted">
-              {t(`cities.${latestOrder.cityKey}`)} · {latestOrder.giveAmount} {latestOrder.giveCurrency} {'->'} {latestOrder.getAmount} {latestOrder.getCurrency}
-            </div>
-            <div className="mt-[6px] text-[11px] font-[500] text-dim">
-              {latestOrder.managerName
-                ? t('admin.managerAssigned', { name: latestOrder.managerName })
-                : t('admin.managerEmpty')}
-            </div>
-            <button
-              type="button"
-              onClick={() => handleRepeatOrder(latestOrder.id)}
-              className="mt-[12px] w-full rounded-r border border-green3 bg-green2 px-[14px] py-[12px] text-[13px] font-[700] uppercase tracking-[0.04em] text-green transition-colors hover:border-green"
-            >
-              {t('home.quickExchangeAction')}
-            </button>
-          </div>
-        ) : (
-          <div className="text-[13px] font-[500] text-muted">{t('home.quickExchangeEmpty')}</div>
-        )}
-      </div>
-
-      <div className="relative z-10 mx-[16px] mt-[12px] rounded-r2 border border-border2 bg-bg2 p-[16px]">
-        <div className="mb-[6px] text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.queueTitle')}</div>
-        {activeOrders.length > 0 ? (
-          <>
-            <div className="text-[16px] font-[700] text-text">{t('home.queueActive', { count: activeOrders.length })}</div>
-            <div className="mt-[6px] text-[12px] font-[500] text-muted">{t('home.queueEta', { minutes: estimatedQueueMinutes })}</div>
-          </>
-        ) : (
-          <div className="text-[13px] font-[500] text-muted">{t('home.queueEmpty')}</div>
-        )}
-      </div>
-
-      <div className="relative z-10 mx-[16px] mt-[12px] rounded-r2 border border-border2 bg-bg2 p-[16px]">
-        <div className="mb-[10px] text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.reserveTitle')}</div>
-        <div className="grid grid-cols-1 gap-[8px] min-[360px]:grid-cols-2">
+        <div className="mb-[10px] text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.exchangeSummaryTitle')}</div>
+        <div className="grid grid-cols-1 gap-[8px] min-[360px]:grid-cols-3">
           <div className="rounded-r border border-border bg-bg3 p-[12px]">
-            <div className="text-[11px] font-[600] uppercase tracking-[0.06em] text-muted">{t('home.reserveUsdt')}</div>
-            <div className="mt-[6px] font-mono text-[20px] font-[700] text-text">{usdtReserve.toFixed(2)}</div>
+            <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-muted">{t('home.commissionLabel')}</div>
+            <div className="mt-[6px] font-mono text-[18px] font-[700] text-text">{benefits.effectiveCommissionPercent.toFixed(1)}%</div>
           </div>
           <div className="rounded-r border border-border bg-bg3 p-[12px]">
-            <div className="text-[11px] font-[600] uppercase tracking-[0.06em] text-muted">{t('home.reserveCash')}</div>
-            <div className="mt-[6px] font-mono text-[20px] font-[700] text-text">
-              {currentCity ? currentCity.limitEUR : '—'}
-            </div>
+            <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-muted">{t('home.reserveCash')}</div>
+            <div className="mt-[6px] font-mono text-[18px] font-[700] text-text">{currentCity ? selectedCityReserve : '—'}</div>
+          </div>
+          <div className="rounded-r border border-border bg-bg3 p-[12px]">
+            <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-muted">{t('home.reserveUsdt')}</div>
+            <div className="mt-[6px] font-mono text-[18px] font-[700] text-text">{usdtReserve.toFixed(0)}</div>
           </div>
         </div>
       </div>
 
-      {/* City Selection */}
       <div className="relative z-10 text-[10px] font-[600] tracking-[0.14em] uppercase text-muted px-[20px] pt-[18px] pb-[10px]">{t('home.cityTitle')}</div>
       <div className="relative z-10 px-[16px]">
         <div className="mb-[12px] rounded-r2 border border-border2 bg-bg2 p-[14px]">
@@ -611,7 +508,6 @@ export default function Home() {
         )}
       </div>
 
-      {/* Error messages inline */}
       {Number(giveAmount) > 0 && (isOverLimit || isEurInvalid || !!reserveMessage) && (
         <div className="px-[16px] mt-[16px]">
           <div className="bg-[rgba(248,113,113,0.1)] border border-[rgba(248,113,113,0.2)] rounded-r p-3 text-[12px] text-error">
@@ -620,70 +516,6 @@ export default function Home() {
         </div>
       )}
 
-      <div className="relative z-10 mx-[16px] mt-[16px] rounded-r2 border border-border2 bg-bg2 p-[16px]">
-        <div className="mb-[12px] text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.historyTitle')}</div>
-        {recentOrders.length > 0 ? (
-          <div className="space-y-[10px]">
-            {recentOrders.map((order) => (
-              <div key={order.id} className="rounded-r border border-border bg-bg3 p-[12px]">
-                <div className="mb-[6px] flex items-center justify-between gap-[8px]">
-                  <div className="text-[12px] font-[700] text-text">{t('home.orderNumber', { id: order.id })}</div>
-                  <div className="rounded-[6px] bg-[rgba(0,208,132,0.1)] px-[8px] py-[4px] text-[10px] font-[700] uppercase tracking-[0.06em] text-green">
-                    {t(`orderStatus.${order.status}`)}
-                  </div>
-                </div>
-                <div className="text-[13px] font-[600] text-text">
-                  {t('home.orderFromTo', { from: order.giveCurrency, to: order.getCurrency })}
-                </div>
-                <div className="mt-[4px] text-[12px] font-[500] text-muted">
-                  {t(`cities.${order.cityKey}`)} · {order.giveAmount} {order.giveCurrency} {'->'} {order.getAmount} {order.getCurrency}
-                </div>
-                <div className="mt-[4px] text-[11px] font-[500] text-dim">
-                  {order.managerName
-                    ? t('admin.managerAssigned', { name: order.managerName })
-                    : t('admin.managerEmpty')}
-                </div>
-                <div className="mt-[4px] text-[11px] font-[500] text-dim">
-                  {new Date(order.createdAt).toLocaleString(language)}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleRepeatOrder(order.id)}
-                  className="mt-[10px] rounded-r border border-border2 bg-bg2 px-[12px] py-[10px] text-[11px] font-[700] uppercase tracking-[0.05em] text-text transition-colors hover:border-green hover:text-green"
-                >
-                  {t('home.repeatOrder')}
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-[13px] font-[500] text-muted">{t('home.historyEmpty')}</div>
-        )}
-      </div>
-
-      <div className="relative z-10 mx-[16px] mt-[12px] rounded-r2 border border-border2 bg-bg2 p-[16px]">
-        <div className="mb-[12px] text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.reviewsTitle')}</div>
-        {latestReviews.length > 0 ? (
-          <div className="space-y-[10px]">
-            {latestReviews.map((review) => (
-              <div key={review.id} className="rounded-r border border-border bg-bg3 p-[12px]">
-                <div className="flex items-center justify-between gap-[8px]">
-                  <div className="text-[12px] font-[700] text-text">{review.userHandle}</div>
-                  <div className="text-[12px] font-[700] text-amber">{'★'.repeat(review.rating)}</div>
-                </div>
-                <div className="mt-[4px] text-[12px] font-[500] text-muted">{review.text}</div>
-                <div className="mt-[6px] text-[11px] font-[500] text-dim">
-                  {t(`cities.${review.cityKey}`)} · {new Date(review.createdAt).toLocaleDateString(language)}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-[13px] font-[500] text-muted">{t('home.reviewsEmpty')}</div>
-        )}
-      </div>
-
-      {/* CTA Button */}
       <div className="relative z-10 p-[16px_16px_0] mt-4">
         <button
           onClick={handleNext}
@@ -697,6 +529,23 @@ export default function Home() {
             }`}
         >
           {direction === 'GIVE_CASH' ? t('home.ctaCash') : t('home.ctaUsdt')}
+        </button>
+      </div>
+
+      <div className="relative z-10 grid grid-cols-2 gap-[8px] px-[16px] pt-[12px] pb-[20px]">
+        <button
+          type="button"
+          onClick={() => navigate('/orders')}
+          className="rounded-r border border-border2 bg-bg2 px-[12px] py-[12px] text-[11px] font-[700] uppercase tracking-[0.05em] text-text transition-colors hover:border-green hover:text-green"
+        >
+          {t('home.openOrderHistory')}
+        </button>
+        <button
+          type="button"
+          onClick={() => (latestUserOrder ? handleRepeatOrder(latestUserOrder.id) : navigate('/profile'))}
+          className="rounded-r border border-border2 bg-bg2 px-[12px] py-[12px] text-[11px] font-[700] uppercase tracking-[0.05em] text-text transition-colors hover:border-green hover:text-green"
+        >
+          {latestUserOrder ? t('home.repeatOrder') : t('home.profileAction')}
         </button>
       </div>
 
