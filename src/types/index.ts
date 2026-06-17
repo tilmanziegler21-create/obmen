@@ -1,5 +1,6 @@
 export type CashCurrency = 'EUR' | 'UAH';
 export type Currency = CashCurrency | 'USDT';
+export type ExchangeAsset = 'EUR_CASH' | 'UAH_CARD' | 'USDT';
 export type OrderStatus = 'accepted' | 'processing' | 'ready' | 'rejected';
 export type LoyaltyTier = 'standard' | 'gold' | 'vip' | 'provider';
 
@@ -23,16 +24,19 @@ export interface ExchangeOrder {
   id: string;
   createdAt: string;
   direction: ExchangeDirection;
+  giveAsset: ExchangeAsset;
   cityId: string;
   cityKey: string;
   giveAmount: string;
   giveCurrency: Currency;
+  getAsset: ExchangeAsset;
   getAmount: string;
   getCurrency: Currency;
   rate: string;
   network: string | null;
   wallet: string | null;
   contact: string | null;
+  cardNumber: string | null;
   userHandle: string;
   managerName: string | null;
   antiPhishingCode: string | null;
@@ -49,6 +53,7 @@ export interface CheckoutPrefill {
   contact: string;
   wallet: string;
   network: string;
+  cardNumber: string;
 }
 
 export interface ProfileSettings {
@@ -85,7 +90,8 @@ export interface ExchangeState {
   // User Selection
   selectedCityId: string | null;
   direction: ExchangeDirection;
-  selectedCashCurrency: CashCurrency;
+  selectedGiveAsset: ExchangeAsset;
+  selectedGetAsset: ExchangeAsset;
   
   // Amounts
   giveAmount: string;
@@ -105,7 +111,8 @@ export interface ExchangeState {
   toggleCityActive: (id: string) => Promise<void>;
   setCity: (id: string) => void;
   setDirection: (dir: ExchangeDirection) => void;
-  setCashCurrency: (currency: CashCurrency) => void;
+  setGiveAsset: (asset: ExchangeAsset) => void;
+  setGetAsset: (asset: ExchangeAsset) => void;
   setGiveAmount: (amount: string) => void;
   setGetAmount: (amount: string) => void;
   applyOrderTemplate: (id: string) => void;

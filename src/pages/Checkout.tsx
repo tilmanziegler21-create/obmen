@@ -6,16 +6,17 @@ import WebApp from '@twa-dev/sdk';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useI18n } from '../i18n';
 import { calculateCustomerMetrics, getClientRate, getCustomerBenefits } from '../lib/customer';
-import { getBaseRateForCashCurrency } from '../lib/rates';
+import { getAssetConversionRate } from '../lib/rates';
+import { getAssetCurrency, getAssetLabel, getDirectionFromGiveAsset } from '../lib/exchangeAssets';
 
 export default function Checkout() {
   const navigate = useNavigate();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const defaultContact = WebApp.initDataUnsafe?.user?.username ? `@${WebApp.initDataUnsafe.user.username}` : '';
   const telegramInitData = WebApp.initData || '';
   const telegramUserId = WebApp.initDataUnsafe?.user?.id ?? null;
   const { 
-    cities, selectedCityId, direction, selectedCashCurrency, rates, usdtReserve, antiPhishingCode, checkoutPrefill, orders, profileSettings,
+    cities, selectedCityId, selectedGiveAsset, selectedGetAsset, rates, usdtReserve, antiPhishingCode, checkoutPrefill, orders, profileSettings,
     giveAmount, getAmount, clearCheckoutPrefill, setCommissionPercent, fetchInitialData
   } = useStore();
   const NETWORKS = [
@@ -26,6 +27,7 @@ export default function Checkout() {
 
   const [contact, setContact] = useState(checkoutPrefill.contact || defaultContact);
   const [wallet, setWallet] = useState(checkoutPrefill.wallet);
+  const [cardNumber, setCardNumber] = useState(checkoutPrefill.cardNumber || '');
   const [network, setNetwork] = useState(
     NETWORKS.some((item) => item.id === checkoutPrefill.network) ? checkoutPrefill.network : NETWORKS[0].id,
   );
@@ -37,14 +39,18 @@ export default function Checkout() {
 
   const city = cities.find(c => c.id === selectedCityId);
   const cityName = city ? t(`cities.${city.cityKey}`) : '-';
-  const isGettingUSDT = direction === 'GIVE_CASH';
-  const requiredCashReserve = direction === 'GIVE_USDT' ? Number(getAmount) : 0;
-  const requiredUsdtReserve = direction === 'GIVE_CASH' ? Number(getAmount) : 0;
+  const direction = getDirectionFromGiveAsset(selectedGiveAsset);
+  const isGettingUSDT = selectedGetAsset === 'USDT';
+  const requiresWallet = selectedGetAsset === 'USDT';
+  const requiresContact = selectedGetAsset === 'EUR_CASH';
+  const requiresCardNumber = selectedGiveAsset === 'UAH_CARD' || selectedGetAsset === 'UAH_CARD';
+  const requiredCashReserve = selectedGetAsset === 'EUR_CASH' ? Number(getAmount) : 0;
+  const requiredUsdtReserve = selectedGetAsset === 'USDT' ? Number(getAmount) : 0;
   const isReserveBlocked =
     !city ||
     !city.isActive ||
-    (direction === 'GIVE_USDT' && selectedCashCurrency === 'EUR' && requiredCashReserve > city.limitEUR) ||
-    (direction === 'GIVE_CASH' && requiredUsdtReserve > usdtReserve);
+    (selectedGetAsset === 'EUR_CASH' && requiredCashReserve > city.limitEUR) ||
+    (selectedGetAsset === 'USDT' && requiredUsdtReserve > usdtReserve);
   const metrics = useMemo(
     () => calculateCustomerMetrics(orders, userHandle),
     [orders, userHandle],
@@ -79,17 +85,20 @@ export default function Checkout() {
           telegramInitData,
           order: {
             direction,
+            giveAsset: selectedGiveAsset,
             cityId: city?.id ?? '',
             city: cityName,
             cityKey: city?.cityKey ?? 'berlin',
             giveAmount,
-            giveCurrency: direction === 'GIVE_CASH' ? selectedCashCurrency : 'USDT',
+            giveCurrency: getAssetCurrency(selectedGiveAsset),
+            getAsset: selectedGetAsset,
             getAmount,
-            getCurrency: direction === 'GIVE_CASH' ? 'USDT' : selectedCashCurrency,
+            getCurrency: getAssetCurrency(selectedGetAsset),
             rate: effectiveRate.toFixed(4),
-            network: isGettingUSDT ? network : null,
-            wallet: isGettingUSDT ? wallet : null,
-            contact: !isGettingUSDT ? contact : null,
+            network: requiresWallet ? network : null,
+            wallet: requiresWallet ? wallet : null,
+            contact: requiresContact ? contact : null,
+            cardNumber: requiresCardNumber ? cardNumber : null,
             userHandle,
             userId: telegramUserId,
             antiPhishingCode,
@@ -149,11 +158,12 @@ export default function Checkout() {
   };
   
   // Basic validation
-  const isValid = isGettingUSDT 
-    ? wallet.length > 10 // Simple wallet check
-    : contact.length > 2;
+  const isValid =
+    (!requiresWallet || wallet.length > 10) &&
+    (!requiresContact || contact.length > 2) &&
+    (!requiresCardNumber || cardNumber.replace(/\s+/g, '').length >= 12);
 
-  const currentRate = getBaseRateForCashCurrency(selectedCashCurrency, rates);
+  const currentRate = getAssetConversionRate(selectedGiveAsset, selectedGetAsset, rates);
   const effectiveRate = getClientRate(direction, currentRate, benefits.effectiveCommissionPercent);
 
   useEffect(() => {
@@ -213,17 +223,23 @@ export default function Checkout() {
           
           <div className="flex items-center justify-between gap-[12px] text-[13px]">
             <span className="text-muted font-[500]">{t('checkout.youGive')}</span>
-            <span className={`text-right font-mono font-[600] text-[15px] ${direction === 'GIVE_CASH' ? 'text-amber' : 'text-usdt'}`}>{giveAmount} {direction === 'GIVE_CASH' ? selectedCashCurrency : 'USDT'}</span>
+            <span className="text-right font-mono text-[15px] font-[600] text-text">
+              {giveAmount} {getAssetLabel(selectedGiveAsset, language)}
+            </span>
           </div>
           
           <div className="flex items-center justify-between gap-[12px] text-[13px]">
             <span className="text-muted font-[500]">{t('checkout.youGet')}</span>
-            <span className={`text-right font-mono font-[600] text-[15px] ${direction === 'GIVE_CASH' ? 'text-usdt' : 'text-amber'}`}>{getAmount} {direction === 'GIVE_CASH' ? 'USDT' : selectedCashCurrency}</span>
+            <span className="text-right font-mono text-[15px] font-[600] text-text">
+              {getAmount} {getAssetLabel(selectedGetAsset, language)}
+            </span>
           </div>
 
           <div className="flex items-center justify-between gap-[12px] border-t border-border pt-[16px] text-[12px]">
             <span className="text-muted font-[500]">{t('checkout.fixedRate')}</span>
-            <span className="text-right font-mono font-[600] text-text">1 {selectedCashCurrency} = {effectiveRate.toFixed(4)} USDT</span>
+            <span className="text-right font-mono font-[600] text-text">
+              1 {getAssetLabel(selectedGiveAsset, language)} = {effectiveRate.toFixed(4)} {getAssetCurrency(selectedGetAsset)}
+            </span>
           </div>
           <div className="flex items-center justify-between gap-[12px] text-[12px]">
             <span className="text-muted font-[500]">{t('checkout.personalCommission')}</span>
@@ -235,9 +251,22 @@ export default function Checkout() {
           </div>
         </div>
 
-        {/* Dynamic Inputs based on direction */}
-        {isGettingUSDT ? (
-          <div className="space-y-[16px]">
+        <div className="space-y-[16px]">
+          {requiresCardNumber && (
+            <div className="space-y-[8px]">
+              <label className="ml-[4px] text-[11px] font-[600] uppercase tracking-[0.06em] text-muted">Номер карты UAH</label>
+              <input
+                type="text"
+                value={cardNumber}
+                onChange={(e) => setCardNumber(e.target.value)}
+                placeholder="5375 4141 1234 5678"
+                className="w-full rounded-r border-[1.5px] border-border2 bg-bg2 p-[16px] text-[14px] text-text outline-none transition-all placeholder:text-dim"
+              />
+            </div>
+          )}
+
+          {requiresWallet && (
+            <div className="space-y-[16px]">
             <div className="space-y-[8px]">
               <label className="text-[11px] text-muted font-[600] uppercase tracking-[0.06em] ml-[4px]">{t('checkout.networkLabel')}</label>
               <div className="grid grid-cols-1 gap-[8px] min-[360px]:grid-cols-3">
@@ -272,8 +301,10 @@ export default function Checkout() {
               />
             </div>
           </div>
-        ) : (
-          <div className="space-y-[8px]">
+          )}
+
+          {requiresContact && (
+            <div className="space-y-[8px]">
             <label className="text-[11px] text-muted font-[600] uppercase tracking-[0.06em] ml-[4px]">{t('checkout.contactLabel')}</label>
             <input 
               type="text"
@@ -283,7 +314,8 @@ export default function Checkout() {
               className="w-full bg-bg2 border-[1.5px] border-border2 focus:border-amber rounded-r p-[16px] text-[14px] text-text outline-none transition-all placeholder:text-dim"
             />
           </div>
-        )}
+          )}
+        </div>
       </div>
 
       <div className="pb-[32px] pt-[16px] mt-auto">
@@ -295,18 +327,14 @@ export default function Checkout() {
         <button
           onClick={handleSubmit}
           disabled={!isValid || isSubmitting || isReserveBlocked}
-          className={`w-full p-[18px] border-none rounded-r2 font-sans text-[15px] font-[700] cursor-pointer transition-all tracking-[0.02em] flex items-center justify-center gap-[8px] relative overflow-hidden active:scale-[0.985] disabled:opacity-35 disabled:cursor-not-allowed disabled:transform-none
-            ${isValid 
-              ? (direction === 'GIVE_CASH' 
-                ? 'bg-gradient-to-br from-[#26A17B] to-[#1B7A5C] text-white shadow-[0_8px_24px_rgba(38,161,123,0.25)]'
-                : 'bg-gradient-to-br from-[#F5A623] to-[#E08B00] text-[#0A0B0F] shadow-[0_8px_24px_rgba(245,166,35,0.25)]')
-              : 'bg-bg3 text-muted'
-            }`}
+          className={`w-full p-[18px] border-none rounded-r2 font-sans text-[15px] font-[700] cursor-pointer transition-all tracking-[0.02em] flex items-center justify-center gap-[8px] relative overflow-hidden active:scale-[0.985] disabled:opacity-35 disabled:cursor-not-allowed disabled:transform-none ${
+            isValid ? 'bg-[#D4AF37] text-[#000000]' : 'bg-bg3 text-muted'
+          }`}
         >
           {isSubmitting ? (
             <span className="animate-pulse">{t('checkout.submitting')}</span>
           ) : (
-            direction === 'GIVE_CASH' ? t('checkout.submitCash') : t('checkout.submitUsdt')
+            `ПОЛУЧИТЬ ${getAssetLabel(selectedGetAsset, language).toUpperCase()}`
           )}
         </button>
       </div>

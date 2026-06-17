@@ -7,6 +7,7 @@ import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useI18n } from '../i18n';
 import type { ExchangeDirection, OrderStatus } from '../types';
 import { DEFAULT_RATES, convertCurrencyToEur } from '../lib/rates';
+import { getRouteLabel, inferOrderAssets } from '../lib/exchangeAssets';
 
 export default function Admin() {
   const navigate = useNavigate();
@@ -526,7 +527,11 @@ export default function Admin() {
                         {t(`cities.${order.cityKey}`)} · {order.giveAmount} {order.giveCurrency} {'->'} {order.getAmount} {order.getCurrency}
                       </div>
                       <div className="mt-[4px] text-[11px] font-[500] text-dim">
-                        {t(order.direction === 'GIVE_CASH' ? 'directions.giveCash' : 'directions.giveUsdt')}
+                        {getRouteLabel(
+                          order.giveAsset ?? inferOrderAssets(order).giveAsset,
+                          order.getAsset ?? inferOrderAssets(order).getAsset,
+                          language,
+                        )}
                       </div>
                     </div>
                     <div className="rounded-[6px] bg-[rgba(0,208,132,0.1)] px-[8px] py-[4px] text-[10px] font-[700] uppercase tracking-[0.06em] text-green">

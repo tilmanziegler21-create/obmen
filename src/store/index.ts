@@ -1,8 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { ExchangeState, City, ExchangeOrder } from '../types';
+import { ExchangeState, City, ExchangeOrder, type ExchangeAsset } from '../types';
 import { generateReferralCode, getCommissionMultiplier } from '../lib/customer';
-import { DEFAULT_RATES, convertCashToUsdt, convertUsdtToCash } from '../lib/rates';
+import { DEFAULT_RATES, convertBetweenAssets, getAssetConversionRate, roundAmountForAsset } from '../lib/rates';
+import { getAllowedTargetAssets, getDefaultTargetAsset, getDirectionFromGiveAsset, inferOrderAssets } from '../lib/exchangeAssets';
 
 type SharedServerState = Pick<
   ExchangeState,
@@ -43,6 +44,7 @@ const DEFAULT_CHECKOUT_PREFILL = {
   contact: '',
   wallet: '',
   network: 'TRC-20',
+  cardNumber: '',
 } as const;
 const DEFAULT_ANTI_PHISHING_CODE = 'BULL';
 const DEFAULT_PROFILE_SETTINGS = {
@@ -71,7 +73,8 @@ export const useStore = create<ExchangeState>()(
       
       selectedCityId: null,
       direction: 'GIVE_CASH',
-      selectedCashCurrency: 'EUR',
+      selectedGiveAsset: 'EUR_CASH',
+      selectedGetAsset: 'USDT',
       
       giveAmount: '',
       getAmount: '',
@@ -218,9 +221,37 @@ export const useStore = create<ExchangeState>()(
       },
       
       setCity: (id) => set({ selectedCityId: id }),
-      setDirection: (dir) => set({ direction: dir, giveAmount: '', getAmount: '' }),
-      setCashCurrency: (currency) => {
-        set({ selectedCashCurrency: currency });
+      setDirection: (dir) => {
+        const nextGiveAsset: ExchangeAsset = dir === 'GIVE_USDT' ? 'USDT' : 'EUR_CASH';
+        set({
+          direction: dir,
+          selectedGiveAsset: nextGiveAsset,
+          selectedGetAsset: getDefaultTargetAsset(nextGiveAsset),
+          giveAmount: '',
+          getAmount: '',
+        });
+      },
+      setGiveAsset: (asset) => {
+        set((state) => ({
+          selectedGiveAsset: asset,
+          selectedGetAsset: getAllowedTargetAssets(asset).includes(state.selectedGetAsset)
+            ? state.selectedGetAsset
+            : getDefaultTargetAsset(asset),
+          direction: getDirectionFromGiveAsset(asset),
+        }));
+        const { giveAmount, getAmount } = get();
+        if (giveAmount) {
+          get().calculateGetAmount();
+        } else if (getAmount) {
+          get().calculateGiveAmount();
+        }
+      },
+      setGetAsset: (asset) => {
+        set((state) => ({
+          selectedGetAsset: getAllowedTargetAssets(state.selectedGiveAsset).includes(asset)
+            ? asset
+            : state.selectedGetAsset,
+        }));
         const { giveAmount, getAmount } = get();
         if (giveAmount) {
           get().calculateGetAmount();
@@ -249,12 +280,8 @@ export const useStore = create<ExchangeState>()(
         return {
           selectedCityId: order.cityId,
           direction: order.direction,
-          selectedCashCurrency:
-            order.giveCurrency === 'EUR' || order.giveCurrency === 'UAH'
-              ? order.giveCurrency
-              : order.getCurrency === 'EUR' || order.getCurrency === 'UAH'
-                ? order.getCurrency
-                : state.selectedCashCurrency,
+          selectedGiveAsset: order.giveAsset,
+          selectedGetAsset: order.getAsset,
           giveAmount: order.giveAmount,
           getAmount: order.getAmount,
           checkoutPrefill: {
@@ -262,6 +289,7 @@ export const useStore = create<ExchangeState>()(
             contact: order.contact ?? '',
             wallet: order.wallet ?? '',
             network: order.network ?? DEFAULT_CHECKOUT_PREFILL.network,
+            cardNumber: order.cardNumber ?? '',
           },
         };
       }),
@@ -278,11 +306,11 @@ export const useStore = create<ExchangeState>()(
 
         set((state) => ({
           usdtReserve:
-            order.direction === 'GIVE_CASH'
+            order.getAsset === 'USDT'
               ? Math.max(0, state.usdtReserve - Number(order.getAmount))
               : state.usdtReserve,
           cities:
-            order.direction === 'GIVE_USDT' && order.getCurrency === 'EUR'
+            order.getAsset === 'EUR_CASH'
               ? state.cities.map((city) =>
                   city.id === order.cityId
                     ? { ...city, limitEUR: Math.max(0, city.limitEUR - Number(order.getAmount)) }
@@ -332,55 +360,37 @@ export const useStore = create<ExchangeState>()(
       },
       
       calculateGetAmount: () => {
-        const { giveAmount, direction, selectedCashCurrency, rates, commissionPercent } = get();
+        const { giveAmount, selectedGiveAsset, selectedGetAsset, rates, commissionPercent } = get();
         if (!giveAmount || isNaN(Number(giveAmount))) {
           set({ getAmount: '' });
           return;
         }
         
         const amount = Number(giveAmount);
-        let result = 0;
-        
-        // COMMISSION LOGIC
-        // Client gives EUR (GIVE_CASH) -> Service takes 4% commission (Client gets less USDT)
-        // Client gives USDT (GIVE_USDT) -> Service takes 4% commission (Client gets less EUR)
-        
         const multiplier = getCommissionMultiplier(commissionPercent);
-
-        if (direction === 'GIVE_CASH') {
-          result = convertCashToUsdt(amount, selectedCashCurrency, rates) * multiplier;
-          set({ getAmount: result > 0 ? result.toFixed(2) : '' });
-        } else {
-          result = convertUsdtToCash(amount, selectedCashCurrency, rates) * multiplier;
-          result =
-            selectedCashCurrency === 'EUR'
-              ? Math.floor(result / 10) * 10
-              : Math.floor(result);
-          set({ getAmount: result > 0 ? result.toString() : '' });
-        }
+        const result = roundAmountForAsset(
+          selectedGetAsset,
+          convertBetweenAssets(amount, selectedGiveAsset, selectedGetAsset, rates) * multiplier,
+        );
+        set({ getAmount: result > 0 ? (selectedGetAsset === 'USDT' ? result.toFixed(2) : String(result)) : '' });
       },
       
       calculateGiveAmount: () => {
-        const { getAmount, direction, selectedCashCurrency, rates, commissionPercent } = get();
+        const { getAmount, selectedGiveAsset, selectedGetAsset, rates, commissionPercent } = get();
         if (!getAmount || isNaN(Number(getAmount))) {
           set({ giveAmount: '' });
           return;
         }
         
         const amount = Number(getAmount);
-        let result = 0;
-        
         const multiplier = getCommissionMultiplier(commissionPercent);
-
-        if (direction === 'GIVE_CASH') {
-          const baseRate = selectedCashCurrency === 'UAH' ? rates.UAH_USDT : rates.EUR_USDT;
-          result = amount / (baseRate * multiplier);
-          set({ giveAmount: result > 0 ? result.toFixed(2) : '' });
-        } else {
-          const baseRate = selectedCashCurrency === 'UAH' ? rates.UAH_USDT : rates.EUR_USDT;
-          result = (amount * baseRate) / multiplier;
-          set({ giveAmount: result > 0 ? result.toFixed(2) : '' });
-        }
+        const baseRate = getAssetConversionRate(selectedGiveAsset, selectedGetAsset, rates);
+        const result = baseRate === 0 ? 0 : amount / (baseRate * multiplier);
+        set({
+          giveAmount: result > 0
+            ? (selectedGiveAsset === 'USDT' ? result.toFixed(2) : String(roundAmountForAsset(selectedGiveAsset, result)))
+            : '',
+        });
       },
       
       fetchInitialData: async () => {
@@ -406,7 +416,7 @@ export const useStore = create<ExchangeState>()(
     }),
     {
       name: 'cryptobull-storage',
-      version: 10,
+      version: 11,
       // Persist core admin and order data, reset user inputs on reload
       partialize: (state) => ({
         cities: state.cities,
@@ -437,11 +447,13 @@ export const useStore = create<ExchangeState>()(
           ...state,
           orders: (state.orders ?? []).map((order) => ({
             ...order,
+            ...inferOrderAssets(order),
             managerName: order.managerName ?? null,
             antiPhishingCode: order.antiPhishingCode ?? state.antiPhishingCode ?? DEFAULT_ANTI_PHISHING_CODE,
             commissionPercent: order.commissionPercent ?? 4,
             discountPercent: order.discountPercent ?? 0,
             referralCodeUsed: order.referralCodeUsed ?? null,
+            cardNumber: order.cardNumber ?? null,
           })),
           usdtReserve: state.usdtReserve ?? 2500,
           rates: {

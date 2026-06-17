@@ -137,11 +137,14 @@ function normalizeState(rawState) {
           ...order,
           id: ensureString(order?.id),
           createdAt: ensureString(order?.createdAt) || new Date().toISOString(),
+          giveAsset: ensureString(order?.giveAsset) || (ensureString(order?.giveCurrency) === 'USDT' ? 'USDT' : ensureString(order?.giveCurrency) === 'UAH' ? 'UAH_CARD' : 'EUR_CASH'),
           managerName: ensureString(order?.managerName) || null,
+          getAsset: ensureString(order?.getAsset) || (ensureString(order?.getCurrency) === 'USDT' ? 'USDT' : ensureString(order?.getCurrency) === 'UAH' ? 'UAH_CARD' : 'EUR_CASH'),
           antiPhishingCode: ensureString(order?.antiPhishingCode) || 'BULL',
           commissionPercent: Number(order?.commissionPercent) || 0,
           discountPercent: Number(order?.discountPercent) || 0,
           referralCodeUsed: ensureString(order?.referralCodeUsed) || null,
+          cardNumber: ensureString(order?.cardNumber) || null,
           telegramChatId: ensureString(order?.telegramChatId) || null,
           telegramMessageId: Number(order?.telegramMessageId) || null,
           status: ['accepted', 'processing', 'ready', 'rejected'].includes(order?.status) ? order.status : 'accepted',
@@ -214,17 +217,20 @@ function normalizeOrderPayload(payload) {
 
   return {
     direction,
+    giveAsset: ensureString(payload.giveAsset) || (ensureString(payload.giveCurrency) === 'USDT' ? 'USDT' : ensureString(payload.giveCurrency) === 'UAH' ? 'UAH_CARD' : 'EUR_CASH'),
     cityId: ensureString(payload.cityId),
     city: ensureString(payload.city),
     cityKey: ensureString(payload.cityKey),
     giveAmount,
     giveCurrency: ensureString(payload.giveCurrency),
+    getAsset: ensureString(payload.getAsset) || (ensureString(payload.getCurrency) === 'USDT' ? 'USDT' : ensureString(payload.getCurrency) === 'UAH' ? 'UAH_CARD' : 'EUR_CASH'),
     getAmount,
     getCurrency: ensureString(payload.getCurrency),
     rate,
     network: ensureString(payload.network) || null,
     wallet: ensureString(payload.wallet) || null,
     contact: ensureString(payload.contact) || null,
+    cardNumber: ensureString(payload.cardNumber) || null,
     antiPhishingCode: ensureString(payload.antiPhishingCode) || 'BULL',
     userHandle: ensureString(payload.userHandle) || 'Unknown',
     commissionPercent: Number(payload.commissionPercent) || 0,
@@ -248,17 +254,32 @@ function formatStatus(status) {
   }
 }
 
+function formatAssetLabel(asset, fallbackCurrency) {
+  switch (asset) {
+    case 'EUR_CASH':
+      return 'EUR наличные';
+    case 'UAH_CARD':
+      return 'UAH карта';
+    case 'USDT':
+      return 'USDT';
+    default:
+      return fallbackCurrency || '-';
+  }
+}
+
 function formatDirection(order) {
-  const left = order.direction === 'GIVE_CASH' ? `Наличные ${order.giveCurrency}` : 'USDT';
-  const right = order.direction === 'GIVE_CASH' ? 'USDT' : `Наличные ${order.getCurrency}`;
+  const left = formatAssetLabel(order.giveAsset, order.giveCurrency);
+  const right = formatAssetLabel(order.getAsset, order.getCurrency);
   return `${left} -> ${right}`;
 }
 
 function formatTelegramOrderMessage(order, isVerified) {
-  const routeDetails =
-    order.direction === 'GIVE_CASH'
-      ? `🔗 <b>Сеть:</b> ${order.network ?? '-'}\n💼 <b>Кошелек:</b> <code>${order.wallet ?? '-'}</code>`
-      : `📱 <b>Контакт:</b> ${order.contact ?? '-'}`;
+  const routeDetails = [
+    order.network ? `🔗 <b>Сеть:</b> ${order.network}` : null,
+    order.wallet ? `💼 <b>Кошелек:</b> <code>${order.wallet}</code>` : null,
+    order.cardNumber ? `💳 <b>Карта UAH:</b> <code>${order.cardNumber}</code>` : null,
+    order.contact ? `📱 <b>Контакт:</b> ${order.contact}` : null,
+  ].filter(Boolean).join('\n');
   const verificationLabel = isVerified ? 'verified' : 'not verified';
   const referralLabel = order.referralCodeUsed ? order.referralCodeUsed : 'none';
 
@@ -271,7 +292,7 @@ function formatTelegramOrderMessage(order, isVerified) {
 🏙 <b>Город:</b> ${order.cityKey}
 💰 <b>Отдают:</b> ${order.giveAmount} ${order.giveCurrency}
 💸 <b>Получают:</b> ${order.getAmount} ${order.getCurrency}
-📊 <b>Курс клиента:</b> 1 ${order.direction === 'GIVE_CASH' ? order.giveCurrency : order.getCurrency} = ${order.rate} USDT
+📊 <b>Курс клиента:</b> 1 ${formatAssetLabel(order.giveAsset, order.giveCurrency)} = ${order.rate} ${order.getCurrency}
 💎 <b>Комиссия:</b> ${order.commissionPercent.toFixed(1)}%
 🎁 <b>Скидка:</b> ${order.discountPercent.toFixed(1)}%
 🏷 <b>Рефкод:</b> ${referralLabel}

@@ -6,11 +6,11 @@ import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useStore } from '../store';
 import { useI18n } from '../i18n';
 import { calculateCustomerMetrics, getCustomerBenefits } from '../lib/customer';
-import type { CashCurrency } from '../types';
-import { getBaseRateForCashCurrency } from '../lib/rates';
+import { getAllowedTargetAssets, getAssetCurrency, getAssetLabel, getRouteLabel } from '../lib/exchangeAssets';
+import { getAssetConversionRate } from '../lib/rates';
 
-function AssetIcon({ asset }: { asset: 'EUR' | 'UAH' | 'USDT' }) {
-  if (asset === 'EUR') {
+function AssetIcon({ asset }: { asset: 'EUR_CASH' | 'UAH_CARD' | 'USDT' }) {
+  if (asset === 'EUR_CASH') {
     return (
       <div className="flex h-[20px] w-[20px] items-center justify-center text-[14px]">
         <span>🇪🇺</span>
@@ -18,7 +18,7 @@ function AssetIcon({ asset }: { asset: 'EUR' | 'UAH' | 'USDT' }) {
     );
   }
 
-  if (asset === 'UAH') {
+  if (asset === 'UAH_CARD') {
     return (
       <div className="flex h-[20px] w-[20px] items-center justify-center text-[14px]">
         <span>🇺🇦</span>
@@ -42,21 +42,21 @@ export default function Exchange() {
   const {
     cities,
     selectedCityId,
-    direction,
     rates,
     rateUpdatedAt,
     orders,
     usdtReserve,
     profileSettings,
     setCity,
-    setDirection,
-    setCashCurrency,
+    selectedGiveAsset,
+    selectedGetAsset,
+    setGiveAsset,
+    setGetAsset,
     giveAmount,
     getAmount,
     setGiveAmount,
     clearCheckoutPrefill,
     setCommissionPercent,
-    selectedCashCurrency,
   } = useStore();
 
   const user = WebApp.initDataUnsafe?.user;
@@ -88,18 +88,16 @@ export default function Exchange() {
   }, [cities, citySearch, t]);
 
   const currentCity = cities.find((city) => city.id === selectedCityId) ?? null;
-  const eurAmount = direction === 'GIVE_CASH' ? Number(giveAmount) : Number(getAmount);
-  const usdtAmount = direction === 'GIVE_CASH' ? Number(getAmount) : Number(giveAmount);
-  const isOverLimit = eurAmount > 500;
+  const eurCashAmount = selectedGiveAsset === 'EUR_CASH' ? Number(giveAmount) : selectedGetAsset === 'EUR_CASH' ? Number(getAmount) : 0;
+  const usdtAmount = selectedGetAsset === 'USDT' ? Number(getAmount) : selectedGiveAsset === 'USDT' ? Number(giveAmount) : 0;
+  const isOverLimit = eurCashAmount > 500;
   const isCityMissing = !currentCity;
   const isCityInactive = currentCity ? !currentCity.isActive : false;
-  const isCashReserveInsufficient = direction === 'GIVE_USDT' && selectedCashCurrency === 'EUR'
-    ? (currentCity ? eurAmount > currentCity.limitEUR : false)
-    : false;
-  const isUsdtReserveInsufficient = direction === 'GIVE_CASH' ? usdtAmount > usdtReserve : false;
-  const isEurInvalid = direction === 'GIVE_CASH' && selectedCashCurrency === 'EUR' && (eurAmount % 10 !== 0 || eurAmount % 1 !== 0);
+  const isCashReserveInsufficient = selectedGetAsset === 'EUR_CASH' ? (currentCity ? eurCashAmount > currentCity.limitEUR : false) : false;
+  const isUsdtReserveInsufficient = selectedGetAsset === 'USDT' ? usdtAmount > usdtReserve : false;
+  const isEurInvalid = selectedGiveAsset === 'EUR_CASH' && (Number(giveAmount) % 10 !== 0 || Number(giveAmount) % 1 !== 0);
   const isReserveBlocked = isCityMissing || isCityInactive || isCashReserveInsufficient || isUsdtReserveInsufficient;
-  const isValid = Number(giveAmount) > 0 && !isOverLimit && !isReserveBlocked && (!isEurInvalid || eurAmount === 0);
+  const isValid = Number(giveAmount) > 0 && !isOverLimit && !isReserveBlocked && (!isEurInvalid || Number(giveAmount) === 0);
   const reserveMessage =
     isCityMissing
       ? t('home.cityRequired')
@@ -111,68 +109,43 @@ export default function Exchange() {
             ? t('home.cityCashReserveError')
             : null;
 
-  const giveCurrency = direction === 'GIVE_CASH' ? selectedCashCurrency : 'USDT';
-  const getCurrency = direction === 'GIVE_CASH' ? 'USDT' : selectedCashCurrency;
-  const currentRate = getBaseRateForCashCurrency(selectedCashCurrency, rates);
+  const currentRate = getAssetConversionRate(selectedGiveAsset, selectedGetAsset, rates);
   const formattedRateUpdatedAt = new Date(rateUpdatedAt).toLocaleTimeString(language, {
     hour: '2-digit',
     minute: '2-digit',
   });
-  const assetOptions = [
-    { code: 'USDT', label: 'USDT' },
-    { code: 'EUR', label: 'EUR' },
-    { code: 'UAH', label: 'UAH' },
-  ] as const;
+  const giveAssetOptions = ['EUR_CASH', 'UAH_CARD', 'USDT'] as const;
+  const getAssetOptions = getAllowedTargetAssets(selectedGiveAsset);
 
   const handleSwapDirection = () => {
     WebApp.HapticFeedback.impactOccurred('medium');
-    const nextDirection = direction === 'GIVE_CASH' ? 'GIVE_USDT' : 'GIVE_CASH';
     const nextGiveAmount = getAmount || '';
-    setDirection(nextDirection);
+    setGiveAsset(selectedGetAsset);
+    setGetAsset(selectedGiveAsset);
     setGiveAmount(nextGiveAmount);
     setActiveAssetSheet(null);
   };
 
-  const handleSelectAsset = (field: 'give' | 'get', asset: 'EUR' | 'UAH' | 'USDT') => {
+  const handleSelectAsset = (field: 'give' | 'get', asset: 'EUR_CASH' | 'UAH_CARD' | 'USDT') => {
     WebApp.HapticFeedback.selectionChanged();
-
-    if (asset === 'USDT') {
-      const expectedDirection = field === 'give' ? 'GIVE_USDT' : 'GIVE_CASH';
-
-      if (expectedDirection === direction) {
-        setActiveAssetSheet(null);
-        return;
-      }
-
-      const nextGiveAmount = getAmount || '';
-      setDirection(expectedDirection);
-      setGiveAmount(nextGiveAmount);
-      setActiveAssetSheet(null);
-      return;
-    }
-
-    const cashCurrency = asset as CashCurrency;
-
     if (field === 'give') {
-      if (direction === 'GIVE_CASH') {
-        setCashCurrency(cashCurrency);
-      } else {
-        const nextGiveAmount = getAmount || '';
-        setDirection('GIVE_CASH');
-        setCashCurrency(cashCurrency);
-        setGiveAmount(nextGiveAmount);
-      }
-    } else if (direction === 'GIVE_USDT') {
-      setCashCurrency(cashCurrency);
-    } else {
       const nextGiveAmount = getAmount || '';
-      setDirection('GIVE_USDT');
-      setCashCurrency(cashCurrency);
+      setGiveAsset(asset);
       setGiveAmount(nextGiveAmount);
+    } else {
+      setGetAsset(asset);
     }
 
     setActiveAssetSheet(null);
   };
+
+  const routeHint = getRouteLabel(selectedGiveAsset, selectedGetAsset, language);
+  const routeInfo =
+    selectedGetAsset === 'USDT'
+      ? `Комиссия ${benefits.effectiveCommissionPercent.toFixed(1)}% · Перевод USDT на ваш кошелек`
+      : selectedGetAsset === 'UAH_CARD'
+        ? `Комиссия ${benefits.effectiveCommissionPercent.toFixed(1)}% · Перевод на карту UAH`
+        : `Комиссия ${benefits.effectiveCommissionPercent.toFixed(1)}% · Через 30 минут выдача наличных EUR`;
 
   const handleNext = () => {
     if (!isValid) {
@@ -196,7 +169,7 @@ export default function Exchange() {
           <div>
             <div className="text-[24px] font-[800] text-[#FFFFFF]">{t('nav.exchange')}</div>
             <div className="mt-[4px] text-[12px] font-[400] uppercase tracking-[0.12em] text-[#808080]">
-              {direction === 'GIVE_CASH' ? t('home.giveCashSubtitle') : t('home.giveUsdtSubtitle')}
+              {routeHint}
             </div>
           </div>
           <LanguageSwitcher />
@@ -204,29 +177,20 @@ export default function Exchange() {
 
         <div className="space-y-[16px]">
           <section className="rounded-[16px] border border-[#222222] bg-[#111111] p-[24px]">
-            <div className="grid grid-cols-2 gap-[8px] rounded-[12px] bg-[#0D0D0D] p-[4px]">
-              <button
-                type="button"
-                onClick={() => {
-                  WebApp.HapticFeedback.selectionChanged();
-                  setDirection('GIVE_CASH');
-                }}
-                className={`rounded-[12px] px-[16px] py-[14px] text-left transition-colors ${direction === 'GIVE_CASH' ? 'bg-[#1A1A1A]' : 'bg-transparent'}`}
-              >
-                <div className="text-[14px] font-[600] text-[#FFFFFF]">{t('home.giveCashTitle')}</div>
-                <div className="mt-[4px] text-[12px] font-[400] text-[#9A9A9A]">{t('home.giveCashSubtitle')}</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  WebApp.HapticFeedback.selectionChanged();
-                  setDirection('GIVE_USDT');
-                }}
-                className={`rounded-[12px] px-[16px] py-[14px] text-left transition-colors ${direction === 'GIVE_USDT' ? 'bg-[#1A1A1A]' : 'bg-transparent'}`}
-              >
-                <div className="text-[14px] font-[600] text-[#FFFFFF]">{t('home.giveUsdtTitle')}</div>
-                <div className="mt-[4px] text-[12px] font-[400] text-[#9A9A9A]">{t('home.giveUsdtSubtitle')}</div>
-              </button>
+            <div className="grid grid-cols-3 gap-[8px] rounded-[12px] bg-[#0D0D0D] p-[4px]">
+              {giveAssetOptions.map((asset) => (
+                <button
+                  key={asset}
+                  type="button"
+                  onClick={() => {
+                    WebApp.HapticFeedback.selectionChanged();
+                    setGiveAsset(asset);
+                  }}
+                  className={`rounded-[12px] px-[12px] py-[14px] text-left transition-colors ${selectedGiveAsset === asset ? 'bg-[#1A1A1A]' : 'bg-transparent'}`}
+                >
+                  <div className="text-[13px] font-[600] text-[#FFFFFF]">{getAssetLabel(asset, language)}</div>
+                </button>
+              ))}
             </div>
           </section>
 
@@ -235,12 +199,10 @@ export default function Exchange() {
               <div className="text-[11px] font-[400] uppercase tracking-[0.12em] text-[#9A9A9A]">{t('home.rateLabel')}</div>
               <div className="text-[12px] font-[400] text-[#9A9A9A]">{t('home.rateUpdated', { time: formattedRateUpdatedAt })}</div>
             </div>
-            <div className="mt-[10px] text-[24px] font-[600] leading-[1.15] text-[#FFFFFF]">1 {selectedCashCurrency} = {currentRate.toFixed(4)} USDT</div>
-            <div className="mt-[8px] text-[13px] font-[400] text-[#9A9A9A]">
-              {direction === 'GIVE_CASH'
-                ? t('home.infoCash', { commission: benefits.effectiveCommissionPercent.toFixed(1) })
-                : t('home.infoUsdt', { commission: benefits.effectiveCommissionPercent.toFixed(1) })}
+            <div className="mt-[10px] text-[24px] font-[600] leading-[1.15] text-[#FFFFFF]">
+              1 {getAssetLabel(selectedGiveAsset, language)} = {currentRate.toFixed(4)} {getAssetCurrency(selectedGetAsset)}
             </div>
+            <div className="mt-[8px] text-[13px] font-[400] text-[#9A9A9A]">{routeInfo}</div>
           </section>
 
           <section className="rounded-[16px] border border-[#222222] bg-[#111111] p-[24px]">
@@ -254,7 +216,7 @@ export default function Exchange() {
                     onChange={(e) => setGiveAmount(e.target.value)}
                     placeholder="0"
                     min="0"
-                    step={direction === 'GIVE_CASH' ? (selectedCashCurrency === 'EUR' ? '10' : '1') : '0.01'}
+                    step={selectedGiveAsset === 'EUR_CASH' ? '10' : selectedGiveAsset === 'USDT' ? '0.01' : '1'}
                     inputMode="decimal"
                     className="min-w-0 flex-1 bg-transparent text-[28px] font-[600] text-[#FFFFFF] outline-none placeholder:text-[#9A9A9A]"
                   />
@@ -263,8 +225,8 @@ export default function Exchange() {
                     onClick={() => setActiveAssetSheet('give')}
                     className="flex shrink-0 items-center gap-[8px] text-[#FFFFFF]"
                   >
-                    <AssetIcon asset={giveCurrency} />
-                    <span className="text-[14px] font-[600]">{giveCurrency}</span>
+                    <AssetIcon asset={selectedGiveAsset} />
+                    <span className="text-[14px] font-[600]">{getAssetLabel(selectedGiveAsset, language)}</span>
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                       <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
@@ -294,8 +256,8 @@ export default function Exchange() {
                     onClick={() => setActiveAssetSheet('get')}
                     className="flex shrink-0 items-center gap-[8px] text-[#FFFFFF]"
                   >
-                    <AssetIcon asset={getCurrency} />
-                    <span className="text-[14px] font-[600]">{getCurrency}</span>
+                    <AssetIcon asset={selectedGetAsset} />
+                    <span className="text-[14px] font-[600]">{getAssetLabel(selectedGetAsset, language)}</span>
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                       <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
@@ -396,18 +358,18 @@ export default function Exchange() {
               {activeAssetSheet === 'give' ? t('home.youGive') : t('checkout.youGet')}
             </div>
             <div className="mt-[14px] grid grid-cols-3 gap-[8px]">
-              {assetOptions.map((asset) => {
-                const isSelected = (activeAssetSheet === 'give' ? giveCurrency : getCurrency) === asset.code;
+              {(activeAssetSheet === 'give' ? giveAssetOptions : getAssetOptions).map((asset: 'EUR_CASH' | 'UAH_CARD' | 'USDT') => {
+                const isSelected = (activeAssetSheet === 'give' ? selectedGiveAsset : selectedGetAsset) === asset;
 
                 return (
                   <button
-                    key={asset.code}
+                    key={asset}
                     type="button"
-                    onClick={() => handleSelectAsset(activeAssetSheet, asset.code)}
+                    onClick={() => handleSelectAsset(activeAssetSheet, asset)}
                     className={`flex min-h-[84px] w-full flex-col items-center justify-center gap-[8px] rounded-[12px] px-[10px] py-[14px] text-center transition-colors ${isSelected ? 'bg-[#1A1A1A]' : 'bg-[#151515] hover:bg-[#1A1A1A]'}`}
                   >
-                    <AssetIcon asset={asset.code} />
-                    <span className="text-[14px] font-[600] text-[#FFFFFF]">{asset.label}</span>
+                    <AssetIcon asset={asset} />
+                    <span className="text-[14px] font-[600] text-[#FFFFFF]">{getAssetLabel(asset, language)}</span>
                   </button>
                 );
               })}
