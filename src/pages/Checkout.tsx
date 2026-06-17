@@ -40,7 +40,6 @@ export default function Checkout() {
   const city = cities.find(c => c.id === selectedCityId);
   const cityName = city ? t(`cities.${city.cityKey}`) : '-';
   const direction = getDirectionFromGiveAsset(selectedGiveAsset);
-  const isGettingUSDT = selectedGetAsset === 'USDT';
   const requiresWallet = selectedGetAsset === 'USDT';
   const requiresContact = selectedGetAsset === 'EUR_CASH';
   const requiresCardNumber = selectedGiveAsset === 'UAH_CARD' || selectedGetAsset === 'UAH_CARD';

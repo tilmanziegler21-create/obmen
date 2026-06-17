@@ -5,20 +5,20 @@ import { useI18n } from '../i18n';
 const ITEMS = [
   {
     path: '/',
-    key: 'home',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-        <path d="M3 8.5L10 3l7 5.5V16a1 1 0 0 1-1 1h-3.5v-4.5h-5V17H4a1 1 0 0 1-1-1V8.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    ),
-  },
-  {
-    path: '/exchange',
     key: 'exchange',
     icon: (
       <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
         <path d="M5 6h10M5 6l2.5-2.5M5 6l2.5 2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         <path d="M15 14H5M15 14l-2.5-2.5M15 14l-2.5 2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
+    path: '/dashboard',
+    key: 'home',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+        <path d="M3 8.5L10 3l7 5.5V16a1 1 0 0 1-1 1h-3.5v-4.5h-5V17H4a1 1 0 0 1-1-1V8.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     ),
   },
