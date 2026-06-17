@@ -1,4 +1,5 @@
-export type Currency = 'EUR' | 'USDT';
+export type CashCurrency = 'EUR' | 'UAH';
+export type Currency = CashCurrency | 'USDT';
 export type OrderStatus = 'accepted' | 'processing' | 'ready' | 'rejected';
 export type LoyaltyTier = 'standard' | 'gold' | 'vip' | 'provider';
 
@@ -11,7 +12,9 @@ export interface City {
 }
 
 export interface Rates {
-  EUR_USDT: number; // e.g., 1 EUR = 1.08 USDT
+  EUR_USDT: number;
+  UAH_USDT: number;
+  EUR_UAH: number;
 }
 
 export type ExchangeDirection = 'GIVE_CASH' | 'GIVE_USDT';
@@ -82,12 +85,14 @@ export interface ExchangeState {
   // User Selection
   selectedCityId: string | null;
   direction: ExchangeDirection;
+  selectedCashCurrency: CashCurrency;
   
   // Amounts
   giveAmount: string;
   getAmount: string;
   
   // Admin Actions
+  saveCityConfig: (id: string, config: Partial<Pick<City, 'limitEUR' | 'groupChatId' | 'isActive'>>) => Promise<boolean>;
   updateCityLimit: (id: string, limit: number) => Promise<void>;
   updateCityGroupChatId: (id: string, groupChatId: string) => Promise<void>;
   updateUsdtReserve: (amount: number) => Promise<void>;
@@ -100,6 +105,7 @@ export interface ExchangeState {
   toggleCityActive: (id: string) => Promise<void>;
   setCity: (id: string) => void;
   setDirection: (dir: ExchangeDirection) => void;
+  setCashCurrency: (currency: CashCurrency) => void;
   setGiveAmount: (amount: string) => void;
   setGetAmount: (amount: string) => void;
   applyOrderTemplate: (id: string) => void;

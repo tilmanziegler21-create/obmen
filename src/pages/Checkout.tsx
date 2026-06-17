@@ -6,6 +6,7 @@ import WebApp from '@twa-dev/sdk';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useI18n } from '../i18n';
 import { calculateCustomerMetrics, getClientRate, getCustomerBenefits } from '../lib/customer';
+import { getBaseRateForCashCurrency } from '../lib/rates';
 
 export default function Checkout() {
   const navigate = useNavigate();
@@ -14,7 +15,7 @@ export default function Checkout() {
   const telegramInitData = WebApp.initData || '';
   const telegramUserId = WebApp.initDataUnsafe?.user?.id ?? null;
   const { 
-    cities, selectedCityId, direction, rates, usdtReserve, antiPhishingCode, checkoutPrefill, orders, profileSettings,
+    cities, selectedCityId, direction, selectedCashCurrency, rates, usdtReserve, antiPhishingCode, checkoutPrefill, orders, profileSettings,
     giveAmount, getAmount, clearCheckoutPrefill, setCommissionPercent, fetchInitialData
   } = useStore();
   const NETWORKS = [
@@ -42,7 +43,7 @@ export default function Checkout() {
   const isReserveBlocked =
     !city ||
     !city.isActive ||
-    (direction === 'GIVE_USDT' && requiredCashReserve > city.limitEUR) ||
+    (direction === 'GIVE_USDT' && selectedCashCurrency === 'EUR' && requiredCashReserve > city.limitEUR) ||
     (direction === 'GIVE_CASH' && requiredUsdtReserve > usdtReserve);
   const metrics = useMemo(
     () => calculateCustomerMetrics(orders, userHandle),
@@ -82,9 +83,9 @@ export default function Checkout() {
             city: cityName,
             cityKey: city?.cityKey ?? 'berlin',
             giveAmount,
-            giveCurrency: direction === 'GIVE_CASH' ? 'EUR' : 'USDT',
+            giveCurrency: direction === 'GIVE_CASH' ? selectedCashCurrency : 'USDT',
             getAmount,
-            getCurrency: direction === 'GIVE_CASH' ? 'USDT' : 'EUR',
+            getCurrency: direction === 'GIVE_CASH' ? 'USDT' : selectedCashCurrency,
             rate: effectiveRate.toFixed(4),
             network: isGettingUSDT ? network : null,
             wallet: isGettingUSDT ? wallet : null,
@@ -152,7 +153,7 @@ export default function Checkout() {
     ? wallet.length > 10 // Simple wallet check
     : contact.length > 2;
 
-  const currentRate = rates.EUR_USDT;
+  const currentRate = getBaseRateForCashCurrency(selectedCashCurrency, rates);
   const effectiveRate = getClientRate(direction, currentRate, benefits.effectiveCommissionPercent);
 
   useEffect(() => {
@@ -212,17 +213,17 @@ export default function Checkout() {
           
           <div className="flex items-center justify-between gap-[12px] text-[13px]">
             <span className="text-muted font-[500]">{t('checkout.youGive')}</span>
-            <span className={`text-right font-mono font-[600] text-[15px] ${direction === 'GIVE_CASH' ? 'text-amber' : 'text-usdt'}`}>{giveAmount} {direction === 'GIVE_CASH' ? 'EUR' : 'USDT'}</span>
+            <span className={`text-right font-mono font-[600] text-[15px] ${direction === 'GIVE_CASH' ? 'text-amber' : 'text-usdt'}`}>{giveAmount} {direction === 'GIVE_CASH' ? selectedCashCurrency : 'USDT'}</span>
           </div>
           
           <div className="flex items-center justify-between gap-[12px] text-[13px]">
             <span className="text-muted font-[500]">{t('checkout.youGet')}</span>
-            <span className={`text-right font-mono font-[600] text-[15px] ${direction === 'GIVE_CASH' ? 'text-usdt' : 'text-amber'}`}>{getAmount} {direction === 'GIVE_CASH' ? 'USDT' : 'EUR'}</span>
+            <span className={`text-right font-mono font-[600] text-[15px] ${direction === 'GIVE_CASH' ? 'text-usdt' : 'text-amber'}`}>{getAmount} {direction === 'GIVE_CASH' ? 'USDT' : selectedCashCurrency}</span>
           </div>
 
           <div className="flex items-center justify-between gap-[12px] border-t border-border pt-[16px] text-[12px]">
             <span className="text-muted font-[500]">{t('checkout.fixedRate')}</span>
-            <span className="text-right font-mono font-[600] text-text">1 EUR = {effectiveRate.toFixed(4)} USDT</span>
+            <span className="text-right font-mono font-[600] text-text">1 {selectedCashCurrency} = {effectiveRate.toFixed(4)} USDT</span>
           </div>
           <div className="flex items-center justify-between gap-[12px] text-[12px]">
             <span className="text-muted font-[500]">{t('checkout.personalCommission')}</span>

@@ -1,58 +1,30 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { useStore } from '../store';
 import WebApp from '@twa-dev/sdk';
 import { useNavigate } from 'react-router-dom';
 import LanguageSwitcher from '../components/LanguageSwitcher';
+import { useStore } from '../store';
 import { useI18n } from '../i18n';
 import { calculateCustomerMetrics, generateReferralCode, getCustomerBenefits } from '../lib/customer';
-
-const CITY_FLAGS: Record<string, string> = {
-  berlin: '🇩🇪',
-  munich: '🏙️',
-  hamburg: '⚓',
-  frankfurt: '🏦',
-  cologne: '⛪',
-  dusseldorf: '🏭',
-  stuttgart: '🚗',
-  leipzig: '🎼',
-  dortmund: '⚽',
-  essen: '🏢',
-  bremen: '⛵',
-  hannover: '🌆',
-  nuremberg: '🏰',
-};
 
 export default function Home() {
   const navigate = useNavigate();
   const { t, language } = useI18n();
-  const { 
-    cities, selectedCityId, direction, rates, rateUpdatedAt, orders, usdtReserve, profileSettings,
-    setCity, setDirection, giveAmount, getAmount, setGiveAmount, applyOrderTemplate, clearCheckoutPrefill, updateProfileSettings, setCommissionPercent
+  const {
+    rates,
+    rateUpdatedAt,
+    orders,
+    usdtReserve,
+    cities,
+    profileSettings,
+    updateProfileSettings,
   } = useStore();
 
   const user = WebApp.initDataUnsafe?.user;
-  const [citySearch, setCitySearch] = useState('');
-  const [isCalculatorFocused, setIsCalculatorFocused] = useState(false);
   const currentUserHandle = user?.username ? `@${user.username}` : (user?.first_name || t('checkout.unknownUser'));
-  
   const adminIds = (import.meta.env.VITE_ADMIN_IDS || '').split(',').map((id: string) => id.trim());
   const isAdmin = user?.id ? adminIds.includes(user.id.toString()) : false;
 
-  const filteredCities = useMemo(() => {
-    const query = citySearch.trim().toLowerCase();
-
-    if (!query) {
-      return cities;
-    }
-
-    return cities.filter((city) => t(`cities.${city.cityKey}`).toLowerCase().includes(query));
-  }, [cities, citySearch, t]);
-
-  const currentUserOrders = useMemo(
-    () => orders.filter((order) => order.userHandle === currentUserHandle),
-    [currentUserHandle, orders],
-  );
   const metrics = useMemo(
     () => calculateCustomerMetrics(orders, currentUserHandle),
     [currentUserHandle, orders],
@@ -61,15 +33,25 @@ export default function Home() {
     () => getCustomerBenefits(metrics, profileSettings.activatedReferralCode),
     [metrics, profileSettings.activatedReferralCode],
   );
-  const assignedManagerOrder = useMemo(
-    () => currentUserOrders.find((order) => order.managerName && order.status !== 'rejected') ?? null,
+  const currentUserOrders = useMemo(
+    () => orders.filter((order) => order.userHandle === currentUserHandle),
+    [currentUserHandle, orders],
+  );
+  const latestActiveOrder = useMemo(
+    () => currentUserOrders.find((order) => order.status === 'accepted' || order.status === 'processing' || order.status === 'ready') ?? null,
     [currentUserOrders],
   );
-  const latestUserOrder = currentUserOrders[0] ?? null;
-
-  useEffect(() => {
-    setCommissionPercent(benefits.effectiveCommissionPercent);
-  }, [benefits.effectiveCommissionPercent, setCommissionPercent]);
+  const totalCashReserve = useMemo(
+    () => cities.filter((city) => city.isActive).reduce((sum, city) => sum + city.limitEUR, 0),
+    [cities],
+  );
+  const activeOrderStatusDotClass = latestActiveOrder?.status === 'ready'
+    ? 'bg-[#D4AF37]'
+    : latestActiveOrder?.status === 'processing'
+      ? 'bg-[#FFFFFF]'
+      : latestActiveOrder?.status === 'rejected'
+        ? 'bg-[#808080]'
+        : 'bg-[#D4AF37]';
 
   useEffect(() => {
     const expectedReferralCode = generateReferralCode(currentUserHandle);
@@ -78,137 +60,57 @@ export default function Home() {
     }
   }, [currentUserHandle, profileSettings.referralCode, updateProfileSettings]);
 
-  const currentCity = cities.find((city) => city.id === selectedCityId) ?? null;
-
-  const eurAmount = direction === 'GIVE_CASH' ? Number(giveAmount) : Number(getAmount);
-  const usdtAmount = direction === 'GIVE_CASH' ? Number(getAmount) : Number(giveAmount);
-  
-  const isOverLimit = eurAmount > 500;
-  const isCityMissing = !currentCity;
-  const isCityInactive = currentCity ? !currentCity.isActive : false;
-  const isCashReserveInsufficient = direction === 'GIVE_USDT' ? (currentCity ? eurAmount > currentCity.limitEUR : false) : false;
-  const isUsdtReserveInsufficient = direction === 'GIVE_CASH' ? usdtAmount > usdtReserve : false;
-  
-  const isEurInvalid = direction === 'GIVE_CASH' && (eurAmount % 10 !== 0 || eurAmount % 1 !== 0);
-  const isReserveBlocked = isCityMissing || isCityInactive || isCashReserveInsufficient || isUsdtReserveInsufficient;
-  const isValid = Number(giveAmount) > 0 && !isOverLimit && !isReserveBlocked && (!isEurInvalid || eurAmount === 0);
-  const reserveMessage =
-    isCityMissing
-      ? t('home.cityRequired')
-      : isCityInactive
-        ? t('home.cityInactive')
-        : isUsdtReserveInsufficient
-          ? t('home.usdtReserveError')
-          : isCashReserveInsufficient
-            ? t('home.cityCashReserveError')
-            : null;
-
-  const currentRate = rates.EUR_USDT;
   const formattedRateUpdatedAt = new Date(rateUpdatedAt).toLocaleTimeString(language, {
     hour: '2-digit',
     minute: '2-digit',
   });
-  const selectedCityReserve = currentCity ? currentCity.limitEUR : 0;
-  const hasInputValue = Number(giveAmount) > 0;
-  const calculatorAccent = direction === 'GIVE_CASH' ? 'amber' : 'usdt';
-  const calculatorGlowClass = isValid
-    ? calculatorAccent === 'amber'
-      ? 'from-[rgba(245,166,35,0.22)] via-[rgba(245,166,35,0.1)] to-transparent'
-      : 'from-[rgba(38,161,123,0.22)] via-[rgba(38,161,123,0.1)] to-transparent'
-    : isCalculatorFocused || hasInputValue
-      ? calculatorAccent === 'amber'
-        ? 'from-[rgba(245,166,35,0.14)] via-[rgba(245,166,35,0.06)] to-transparent'
-        : 'from-[rgba(38,161,123,0.14)] via-[rgba(38,161,123,0.06)] to-transparent'
-      : 'from-[rgba(255,255,255,0.06)] via-transparent to-transparent';
-  const calculatorBorderClass = isValid
-    ? calculatorAccent === 'amber'
-      ? 'border-[rgba(245,166,35,0.45)] shadow-[0_0_0_1px_rgba(245,166,35,0.12),0_20px_60px_rgba(245,166,35,0.18)]'
-      : 'border-[rgba(38,161,123,0.45)] shadow-[0_0_0_1px_rgba(38,161,123,0.12),0_20px_60px_rgba(38,161,123,0.18)]'
-    : isCalculatorFocused || hasInputValue
-      ? calculatorAccent === 'amber'
-        ? 'border-[rgba(245,166,35,0.28)] shadow-[0_0_0_1px_rgba(245,166,35,0.08),0_16px_42px_rgba(245,166,35,0.1)]'
-        : 'border-[rgba(38,161,123,0.28)] shadow-[0_0_0_1px_rgba(38,161,123,0.08),0_16px_42px_rgba(38,161,123,0.1)]'
-      : 'border-border2 shadow-none';
-  const calculatorBadgeClass = isValid
-    ? calculatorAccent === 'amber'
-      ? 'border-[rgba(245,166,35,0.32)] bg-[rgba(245,166,35,0.14)] text-amber'
-      : 'border-[rgba(38,161,123,0.32)] bg-[rgba(38,161,123,0.14)] text-usdt'
-    : 'border-border2 bg-bg3 text-muted';
 
-  const handleNext = () => {
-    if (isValid) {
-      WebApp.HapticFeedback.impactOccurred('medium');
-      clearCheckoutPrefill();
-      navigate('/checkout');
-    }
-  };
-
-  const setAmount = (val: number) => {
-    WebApp.HapticFeedback.selectionChanged();
-    setGiveAmount(val.toString());
-  };
-
-  const handleRepeatOrder = (orderId: string) => {
+  const handleOpenExchange = () => {
     WebApp.HapticFeedback.impactOccurred('medium');
-    applyOrderTemplate(orderId);
-    navigate('/checkout');
+    navigate('/exchange');
   };
 
-  const handleOpenManagerContact = () => {
-    const rawValue = profileSettings.managerContact.trim();
-    if (!rawValue) {
-      return;
-    }
-
-    const normalizedValue = rawValue
-      .replace(/^https?:\/\/t\.me\//, '')
-      .replace(/^@/, '')
-      .trim();
-
-    if (!normalizedValue) {
-      return;
-    }
-
+  const handleOpenHistory = () => {
     WebApp.HapticFeedback.impactOccurred('light');
-    WebApp.openTelegramLink(`https://t.me/${normalizedValue}`);
+    navigate('/orders');
   };
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="flex-1 flex flex-col"
+      className="flex-1 px-[16px] pb-[24px]"
+      style={{ paddingTop: 'max(16px, env(safe-area-inset-top))' }}
     >
-      <header
-        className="relative z-10 flex items-start justify-between gap-[12px] border-b border-border px-[16px] pb-[16px] pt-[16px]"
-        style={{ paddingTop: 'max(16px, env(safe-area-inset-top))' }}
-      >
-        <div 
-          className={`min-w-0 flex flex-1 items-center gap-[10px] ${isAdmin ? 'cursor-pointer' : ''}`}
+      <header className="mb-[16px] flex items-start justify-between gap-[12px]">
+        <div
+          className={`min-w-0 flex items-center gap-[12px] ${isAdmin ? 'cursor-pointer' : ''}`}
           onClick={() => {
-            if (isAdmin) navigate('/admin');
+            if (isAdmin) {
+              navigate('/admin');
+            }
           }}
         >
-          <div className="w-[36px] h-[36px] rounded-[10px] bg-gradient-to-br from-[#00D084] to-[#00A86B] flex items-center justify-center shrink-0">
-            {/* Bull Icon Logo */}
-            <svg viewBox="0 0 24 24" fill="none" className="w-[20px] h-[20px]">
-              <path d="M12 18C15.3137 18 18 15.3137 18 12C18 8.68629 15.3137 6 12 6C8.68629 6 6 8.68629 6 12C6 15.3137 8.68629 18 12 18Z" stroke="#0A0B0F" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M7.5 8L5 4" stroke="#0A0B0F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M16.5 8L19 4" stroke="#0A0B0F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M9 13H15" stroke="#0A0B0F" strokeWidth="1.5" strokeLinecap="round"/>
+          <div className="flex h-[40px] w-[40px] items-center justify-center rounded-[12px] bg-[#111111] border border-[#222222]">
+            <svg viewBox="0 0 24 24" fill="none" className="h-[20px] w-[20px]">
+              <path d="M12 18C15.3137 18 18 15.3137 18 12C18 8.68629 15.3137 6 12 6C8.68629 6 6 8.68629 6 12C6 15.3137 8.68629 18 12 18Z" stroke="#D4AF37" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M7.5 8L5 4" stroke="#D4AF37" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M16.5 8L19 4" stroke="#D4AF37" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M9 13H15" stroke="#D4AF37" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
           </div>
           <div className="min-w-0">
-            <div className="truncate text-[15px] font-[800] tracking-[0.04em] text-text min-[360px]:text-[17px]">CryptoBull</div>
-            <div className="text-[10px] font-[500] text-muted tracking-[0.1em] mt-[1px]">{t('app.subtitle')}</div>
+            <div className="truncate text-[18px] font-[800] tracking-[0.04em] text-text">CryptoBull</div>
+            <div className="mt-[3px] text-[11px] font-[400] uppercase tracking-[0.12em] text-[#9A9A9A]">{t('app.subtitle')}</div>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-[8px]">
+
+        <div className="flex items-center gap-[8px]">
           <LanguageSwitcher />
           <button
             type="button"
             onClick={() => navigate('/profile')}
-            className="flex h-[34px] w-[34px] items-center justify-center overflow-hidden rounded-full border border-border2 bg-bg3 text-[13px] font-[700] text-muted transition-colors hover:border-green"
+            className="flex h-[36px] w-[36px] items-center justify-center overflow-hidden rounded-full border border-[#222222] bg-[#111111] text-[13px] font-[700] text-[#FFFFFF]"
           >
             {user?.photo_url ? (
               <img src={user.photo_url} alt={t('app.avatarAlt')} className="h-full w-full object-cover" />
@@ -219,409 +121,75 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="relative z-10 mx-[16px] mt-[12px] grid grid-cols-2 gap-[8px]">
-        <button
-          type="button"
-          onClick={() => navigate('/orders')}
-          className="rounded-r border border-border2 bg-bg2 px-[14px] py-[12px] text-[12px] font-[700] uppercase tracking-[0.05em] text-text transition-colors hover:border-green hover:text-green"
-        >
-          {t('home.myOrdersAction')}
-        </button>
-        {isAdmin ? (
-          <button
-            type="button"
-            onClick={() => navigate('/admin')}
-            className="rounded-r border border-green3 bg-green2 px-[14px] py-[12px] text-[12px] font-[700] uppercase tracking-[0.05em] text-green transition-colors hover:border-green"
-          >
-            {t('home.adminShortAction')}
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => navigate('/profile')}
-            className="rounded-r border border-border2 bg-bg2 px-[14px] py-[12px] text-[12px] font-[700] uppercase tracking-[0.05em] text-text transition-colors hover:border-green hover:text-green"
-          >
-            {t('home.profileAction')}
-          </button>
-        )}
-      </div>
-
-      {latestUserOrder && (
-        <div className="relative z-10 mx-[16px] mt-[12px] rounded-r2 border border-border2 bg-bg2 p-[16px]">
-          <div className="flex items-center justify-between gap-[8px]">
-            <div>
-              <div className="text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.latestOrderTitle')}</div>
-              <div className="mt-[6px] text-[14px] font-[700] text-text">{t('home.orderNumber', { id: latestUserOrder.id })}</div>
-            </div>
-            <div className="rounded-[6px] bg-green2 px-[8px] py-[4px] text-[10px] font-[700] uppercase tracking-[0.06em] text-green">
-              {t(`orderStatus.${latestUserOrder.status}`)}
-            </div>
+      <div className="space-y-[16px]">
+        <section className="rounded-[16px] border border-[#222222] bg-[#111111] px-[24px] py-[24px]">
+          <div className="flex items-center gap-[8px] text-[12px] font-[400] text-[#9A9A9A]">
+            <span className={`h-[8px] w-[8px] rounded-full ${latestActiveOrder ? activeOrderStatusDotClass : 'bg-[#222222]'}`}></span>
+            <span>{latestActiveOrder ? t(`orderStatus.${latestActiveOrder.status}`) : t('home.orderPendingManager')}</span>
           </div>
-          <div className="mt-[8px] text-[12px] font-[500] text-muted">
-            {t(`cities.${latestUserOrder.cityKey}`)} · {latestUserOrder.giveAmount} {latestUserOrder.giveCurrency} {'->'} {latestUserOrder.getAmount} {latestUserOrder.getCurrency}
-          </div>
-          <div className="mt-[6px] text-[11px] font-[500] text-dim">
-            {latestUserOrder.managerName
-              ? t('admin.managerAssigned', { name: latestUserOrder.managerName })
-              : t('home.orderPendingManager')}
-          </div>
-          <div className="mt-[12px] grid grid-cols-2 gap-[8px]">
-            <button
-              type="button"
-              onClick={() => navigate('/orders')}
-              className="rounded-r border border-border2 bg-bg3 px-[12px] py-[11px] text-[11px] font-[700] uppercase tracking-[0.05em] text-text transition-colors hover:border-green hover:text-green"
-            >
-              {t('home.openOrderHistory')}
-            </button>
-            <button
-              type="button"
-              onClick={handleOpenManagerContact}
-              disabled={!profileSettings.managerContact.trim()}
-              className="rounded-r border border-green3 bg-green2 px-[12px] py-[11px] text-[11px] font-[700] uppercase tracking-[0.05em] text-green transition-colors hover:border-green disabled:opacity-50"
-            >
-              {t('home.contactManager')}
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="relative z-10 text-[10px] font-[600] tracking-[0.14em] uppercase text-muted px-[20px] pt-[18px] pb-[10px]">{t('home.actionTitle')}</div>
-      <div className="relative z-10 px-[16px] pt-[16px] pb-0">
-        <div className="grid grid-cols-1 gap-[8px] min-[360px]:grid-cols-2">
-          
-          <div 
-            onClick={() => { WebApp.HapticFeedback.selectionChanged(); setDirection('GIVE_CASH'); }}
-            className={`bg-bg2 border-[1.5px] rounded-r2 p-[16px_14px] cursor-pointer transition-all relative overflow-hidden text-left ${direction === 'GIVE_CASH' ? 'border-amber bg-amber2' : 'border-border'}`}
-          >
-            {direction === 'GIVE_CASH' && <div className="absolute inset-0 rounded-r2 bg-gradient-to-br from-[rgba(245,166,35,0.08)] to-transparent"></div>}
-            
-            <div className={`absolute top-[12px] right-[12px] w-[18px] h-[18px] rounded-full flex items-center justify-center transition-all ${direction === 'GIVE_CASH' ? 'bg-amber border-amber' : 'bg-bg3 border-[1.5px] border-border2'}`}>
-              <svg viewBox="0 0 10 10" fill="none" className={`w-[10px] h-[10px] transition-opacity ${direction === 'GIVE_CASH' ? 'opacity-100' : 'opacity-0'}`}>
-                <path d="M2 5l2.5 2.5L8 3" stroke="#0A0B0F" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
-            
-            <div className={`w-[42px] h-[42px] rounded-[12px] flex items-center justify-center mb-[10px] transition-all ${direction === 'GIVE_CASH' ? 'bg-[rgba(245,166,35,0.15)] border-[rgba(245,166,35,0.3)]' : 'bg-bg3 border border-border'}`}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <rect x="2" y="6" width="20" height="13" rx="2" stroke="#F5A623" strokeWidth="1.8"/>
-                <circle cx="12" cy="12.5" r="3" stroke="#F5A623" strokeWidth="1.5"/>
-                <path d="M2 9.5h2M20 9.5h2M2 15.5h2M20 15.5h2" stroke="#F5A623" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
-            </div>
-            
-            <div className={`text-[14px] font-[700] mb-[2px] ${direction === 'GIVE_CASH' ? 'text-amber' : 'text-text'}`}>{t('home.giveCashTitle')}</div>
-            <div className="text-[11px] text-muted font-[500]">{t('home.giveCashSubtitle')}</div>
-          </div>
-
-          <div 
-            onClick={() => { WebApp.HapticFeedback.selectionChanged(); setDirection('GIVE_USDT'); }}
-            className={`bg-bg2 border-[1.5px] rounded-r2 p-[16px_14px] cursor-pointer transition-all relative overflow-hidden text-left ${direction === 'GIVE_USDT' ? 'border-usdt bg-usdt2' : 'border-border'}`}
-          >
-            {direction === 'GIVE_USDT' && <div className="absolute inset-0 rounded-r2 bg-gradient-to-br from-[rgba(38,161,123,0.08)] to-transparent"></div>}
-            
-            <div className={`absolute top-[12px] right-[12px] w-[18px] h-[18px] rounded-full flex items-center justify-center transition-all ${direction === 'GIVE_USDT' ? 'bg-usdt border-usdt' : 'bg-bg3 border-[1.5px] border-border2'}`}>
-              <svg viewBox="0 0 10 10" fill="none" className={`w-[10px] h-[10px] transition-opacity ${direction === 'GIVE_USDT' ? 'opacity-100' : 'opacity-0'}`}>
-                <path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
-            
-            <div className={`w-[42px] h-[42px] rounded-[12px] flex items-center justify-center mb-[10px] transition-all ${direction === 'GIVE_USDT' ? 'bg-[rgba(38,161,123,0.15)] border-[rgba(38,161,123,0.3)]' : 'bg-bg3 border border-border'}`}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="10" fill="#26A17B" opacity="0.18"/>
-                <path d="M8 7h8v2H8V7z" fill="#26A17B"/>
-                <path d="M12 9v8" stroke="#26A17B" strokeWidth="2" strokeLinecap="round"/>
-                <path d="M8.5 12c0 0 1 1.5 3.5 1.5s3.5-1.5 3.5-1.5" stroke="#26A17B" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
-            </div>
-            
-            <div className={`text-[14px] font-[700] mb-[2px] ${direction === 'GIVE_USDT' ? 'text-usdt' : 'text-text'}`}>{t('home.giveUsdtTitle')}</div>
-            <div className="text-[11px] text-muted font-[500]">{t('home.giveUsdtSubtitle')}</div>
-          </div>
-
-        </div>
-      </div>
-
-      <div className="relative z-10 m-[12px_16px_0] rounded-r border border-border bg-bg2 p-[12px_16px]">
-        <div className="flex min-w-0 items-center gap-[8px]">
-          <div className="flex min-w-0 items-center gap-[8px]">
-          <div className="w-[28px] h-[28px] flex items-center justify-center">
-            <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-              <circle cx="14" cy="14" r="13" fill="#1B3D2F" stroke="#26A17B" strokeWidth="1"/>
-              <text x="14" y="18.5" textAnchor="middle" fontFamily="'JetBrains Mono',monospace" fontSize="10" fontWeight="700" fill="#26A17B">₮</text>
-            </svg>
-          </div>
-            <div className="min-w-0">
-            <div className="text-[11px] text-muted font-[500]">{t('home.rateLabel')}</div>
-              <div className="mt-[1px] break-words font-mono text-[13px] font-[600] text-text min-[360px]:text-[14px]">1 EUR = {currentRate.toFixed(4)} USDT</div>
-            <div className="mt-[4px] text-[10px] font-[500] text-dim">{t('home.rateUpdated', { time: formattedRateUpdatedAt })}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {assignedManagerOrder && (
-        <div className="relative z-10 mx-[16px] mt-[12px] rounded-r2 border border-border2 bg-bg2 p-[16px]">
-          <div className="mb-[10px] flex items-center justify-between gap-[8px]">
-            <div className="text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.managerCardTitle')}</div>
-            <div className="rounded-[6px] bg-green2 px-[8px] py-[4px] text-[10px] font-[700] uppercase tracking-[0.06em] text-green">
-              {t(`orderStatus.${assignedManagerOrder.status}`)}
-            </div>
-          </div>
-          <div className="rounded-r border border-border bg-bg3 p-[14px]">
-            <div className="flex items-start gap-[12px]">
-              <div className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full border border-border2 bg-bg2 text-[15px] font-[700] text-muted">
-                {(assignedManagerOrder.managerName ?? profileSettings.displayName ?? 'M').charAt(0).toUpperCase()}
+          {latestActiveOrder ? (
+            <>
+              <div className="mt-[12px] text-[18px] font-[600] text-[#FFFFFF]">{t('home.orderNumber', { id: latestActiveOrder.id })}</div>
+              <div className="mt-[8px] text-[14px] font-[400] leading-[1.7] text-[#9A9A9A]">
+                {latestActiveOrder.giveAmount} {latestActiveOrder.giveCurrency} {'->'} {latestActiveOrder.getAmount} {latestActiveOrder.getCurrency}
               </div>
-              <div className="min-w-0 flex-1">
-                <div className="break-words text-[14px] font-[700] text-text">
-                  {assignedManagerOrder.managerName ?? profileSettings.displayName}
-                </div>
-                <div className="mt-[4px] text-[11px] font-[600] uppercase tracking-[0.05em] text-green">
-                  {profileSettings.roleLabel}
-                </div>
-                <div className="mt-[6px] text-[12px] font-[500] text-muted">
-                  {t('home.managerContactValue', { value: profileSettings.managerContact })}
-                </div>
-                <div className="mt-[4px] text-[11px] font-[500] text-dim">
-                  {t('home.managerDealValue', { id: assignedManagerOrder.id })}
-                </div>
+              <div className="mt-[8px] text-[12px] font-[400] text-[#9A9A9A]">
+                {t(`cities.${latestActiveOrder.cityKey}`)} · {new Date(latestActiveOrder.createdAt).toLocaleString(language)}
               </div>
-            </div>
-            <button
-              type="button"
-              onClick={handleOpenManagerContact}
-              disabled={!profileSettings.managerContact.trim()}
-              className="mt-[12px] w-full rounded-r border border-green3 bg-green2 px-[14px] py-[12px] text-[12px] font-[700] uppercase tracking-[0.05em] text-green transition-colors hover:border-green disabled:opacity-50"
-            >
-              {t('home.contactManager')}
-            </button>
-          </div>
-        </div>
-      )}
-
-      <motion.div
-        animate={{
-          scale: isCalculatorFocused ? 1.004 : 1,
-          y: isCalculatorFocused ? -2 : 0,
-        }}
-        transition={{ duration: 0.25, ease: 'easeOut' }}
-        className="relative z-10 mx-[16px] mt-[18px]"
-      >
-        <div className={`pointer-events-none absolute inset-0 rounded-[24px] bg-gradient-to-br ${calculatorGlowClass} blur-[26px] transition-all duration-300 ${isValid ? 'opacity-100' : isCalculatorFocused || hasInputValue ? 'opacity-80' : 'opacity-55'}`}></div>
-        <div className={`relative overflow-hidden rounded-[24px] border bg-bg2/95 p-[18px] transition-all duration-300 ${calculatorBorderClass}`}>
-          <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
-
-          <div className="mb-[18px] flex items-start justify-between gap-[12px]">
-            <div>
-              <div className="text-[28px] font-[800] leading-none text-text min-[360px]:text-[34px]">
-                {t('home.calculatorHint')}
-              </div>
-              <div className="mt-[8px] text-[11px] font-[600] tracking-[0.05em] text-muted">
-                {isValid ? t('home.calculatorReady') : t('home.amountTitle')}
-              </div>
-            </div>
-            <div className={`shrink-0 rounded-[999px] border px-[10px] py-[6px] text-[10px] font-[700] uppercase tracking-[0.08em] transition-colors ${calculatorBadgeClass}`}>
-              {direction === 'GIVE_CASH' ? t('home.assetCrypto') : t('home.assetCash')}
-            </div>
-          </div>
-
-          <div className="rounded-[20px] border border-white/6 bg-[#0f1115] px-[14px] py-[14px]">
-            <div className="flex items-start justify-between gap-[12px]">
-              <div className="min-w-0 flex-1">
-                <div className="text-[13px] font-[500] text-muted">{t('home.youGive')}</div>
-                <div className="mt-[14px] flex items-end gap-[8px]">
-                  <span className="font-mono text-[30px] font-[600] text-text min-[360px]:text-[38px]">
-                    {giveAmount || '0'}
-                  </span>
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-[10px] pl-[8px]">
-                <div className={`flex h-[36px] w-[36px] items-center justify-center rounded-full border ${direction === 'GIVE_CASH' ? 'border-[rgba(245,166,35,0.3)] bg-[#2A2318] text-amber' : 'border-[rgba(38,161,123,0.3)] bg-[#1E2A20] text-usdt'}`}>
-                  {direction === 'GIVE_CASH' ? (
-                    <span className="text-[18px] font-[700]">€</span>
-                  ) : (
-                    <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
-                      <circle cx="8" cy="8" r="7.5" fill="transparent" stroke="#26A17B" strokeWidth="1"/>
-                      <text x="8" y="11.5" textAnchor="middle" fontFamily="'JetBrains Mono',monospace" fontSize="7" fontWeight="700" fill="#26A17B">₮</text>
-                    </svg>
-                  )}
-                </div>
-                <div className="text-[18px] font-[500] text-text min-[360px]:text-[20px]">
-                  {direction === 'GIVE_CASH' ? 'EUR' : 'USDT'}
-                </div>
-              </div>
-            </div>
-
-            <div className="my-[14px] flex items-center gap-[12px]">
-              <div className="h-px flex-1 bg-white/12"></div>
-              <div className={`flex h-[44px] w-[44px] items-center justify-center rounded-full border border-[rgba(233,214,43,0.28)] bg-[rgba(233,214,43,0.08)] shadow-[0_0_24px_rgba(233,214,43,0.12)] transition-transform duration-300 ${isCalculatorFocused || hasInputValue ? 'scale-105' : ''}`}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                  <path d="M7 7h10M7 7l3-3M7 7l3 3" stroke="#E9D62B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M17 17H7M17 17l-3-3M17 17l-3 3" stroke="#E9D62B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </div>
-              <div className="h-px flex-1 bg-white/12"></div>
-            </div>
-
-            <div className="flex items-start justify-between gap-[12px]">
-              <div className="min-w-0 flex-1">
-                <div className="text-[13px] font-[500] text-muted">{t('checkout.youGet')}</div>
-                <div className={`mt-[14px] font-mono text-[30px] font-[600] transition-colors duration-300 min-[360px]:text-[38px] ${getAmount ? 'text-text' : 'text-muted'}`}>
-                  {getAmount || '0'}
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-[10px] pl-[8px]">
-                <div className={`flex h-[36px] w-[36px] items-center justify-center rounded-full border ${direction === 'GIVE_CASH' ? 'border-[rgba(38,161,123,0.3)] bg-[#1E2A20]' : 'border-[rgba(245,166,35,0.3)] bg-[#2A2318] text-amber'}`}>
-                  {direction === 'GIVE_CASH' ? (
-                    <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
-                      <circle cx="8" cy="8" r="7.5" fill="transparent" stroke="#26A17B" strokeWidth="1"/>
-                      <text x="8" y="11.5" textAnchor="middle" fontFamily="'JetBrains Mono',monospace" fontSize="7" fontWeight="700" fill="#26A17B">₮</text>
-                    </svg>
-                  ) : (
-                    <span className="text-[18px] font-[700]">€</span>
-                  )}
-                </div>
-                <div className="text-[18px] font-[500] text-text min-[360px]:text-[20px]">
-                  {direction === 'GIVE_CASH' ? 'USDT' : 'EUR'}
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-[14px] flex items-center gap-[10px] border-t border-white/8 pt-[12px]">
-              <input
-                type="number"
-                value={giveAmount}
-                onChange={(e) => setGiveAmount(e.target.value)}
-                onFocus={() => setIsCalculatorFocused(true)}
-                onBlur={() => setIsCalculatorFocused(false)}
-                placeholder="0"
-                min="0"
-                step="50"
-                inputMode="decimal"
-                className="flex-1 rounded-[12px] border border-white/8 bg-bg3/70 px-[12px] py-[10px] font-mono text-[14px] font-[600] text-text outline-none transition-colors placeholder:text-dim focus:border-green"
-              />
-              <div className="text-[11px] font-[600] text-muted">
-                {direction === 'GIVE_CASH'
-                  ? t('home.infoCash', { commission: benefits.effectiveCommissionPercent.toFixed(1) })
-                  : t('home.infoUsdt', { commission: benefits.effectiveCommissionPercent.toFixed(1) })}
-              </div>
-            </div>
-
-            <div className="mt-[12px] flex flex-wrap gap-[6px]">
-              {[100, 250, 500, 1000, 5000].map((val) => (
-                <button
-                  key={val}
-                  type="button"
-                  onClick={() => setAmount(val)}
-                  className="min-w-[56px] flex-1 rounded-[10px] border border-white/8 bg-bg3 px-[10px] py-[8px] text-[11px] font-[600] text-muted transition-all hover:border-border3 hover:text-text active:scale-95"
-                >
-                  {val >= 1000 ? `${val / 1000}K` : val}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </motion.div>
-
-      <div className="relative z-10 mx-[16px] mt-[12px] rounded-r2 border border-border2 bg-bg2 p-[16px]">
-        <div className="mb-[10px] text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.exchangeSummaryTitle')}</div>
-        <div className="grid grid-cols-1 gap-[8px] min-[360px]:grid-cols-3">
-          <div className="rounded-r border border-border bg-bg3 p-[12px]">
-            <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-muted">{t('home.commissionLabel')}</div>
-            <div className="mt-[6px] font-mono text-[18px] font-[700] text-text">{benefits.effectiveCommissionPercent.toFixed(1)}%</div>
-          </div>
-          <div className="rounded-r border border-border bg-bg3 p-[12px]">
-            <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-muted">{t('home.reserveCash')}</div>
-            <div className="mt-[6px] font-mono text-[18px] font-[700] text-text">{currentCity ? selectedCityReserve : '—'}</div>
-          </div>
-          <div className="rounded-r border border-border bg-bg3 p-[12px]">
-            <div className="text-[10px] font-[600] uppercase tracking-[0.06em] text-muted">{t('home.reserveUsdt')}</div>
-            <div className="mt-[6px] font-mono text-[18px] font-[700] text-text">{usdtReserve.toFixed(0)}</div>
-          </div>
-        </div>
-      </div>
-
-      <div className="relative z-10 text-[10px] font-[600] tracking-[0.14em] uppercase text-muted px-[20px] pt-[18px] pb-[10px]">{t('home.cityTitle')}</div>
-      <div className="relative z-10 px-[16px]">
-        <div className="mb-[12px] rounded-r2 border border-border2 bg-bg2 p-[14px]">
-          <div className="mb-[10px] flex flex-col gap-[6px] min-[360px]:flex-row min-[360px]:items-center min-[360px]:justify-between">
-            <div className="text-[11px] font-[600] uppercase tracking-[0.08em] text-muted">{t('home.searchLabel')}</div>
-            <div className="text-[11px] font-[500] text-muted">{t('home.cityCount', { count: filteredCities.length })}</div>
-          </div>
-          <input
-            type="text"
-            value={citySearch}
-            onChange={(e) => setCitySearch(e.target.value)}
-            placeholder={t('home.searchPlaceholder')}
-            className="w-full rounded-r border border-border bg-bg3 px-[14px] py-[12px] text-[14px] text-text outline-none transition-colors placeholder:text-dim focus:border-green"
-          />
-        </div>
-
-        {filteredCities.length > 0 ? (
-          <div className="grid grid-cols-1 gap-[8px] min-[360px]:grid-cols-2">
-            {filteredCities.map(city => (
               <button
-                key={city.id}
-                onClick={() => { WebApp.HapticFeedback.selectionChanged(); setCity(city.id); }}
-                className={`bg-bg2 border-[1.5px] rounded-r p-[13px_12px] cursor-pointer flex items-center gap-[9px] transition-all hover:border-border2 ${selectedCityId === city.id ? 'border-green bg-[rgba(0,208,132,0.05)]' : 'border-border'}`}
+                type="button"
+                onClick={handleOpenHistory}
+                className="mt-[16px] rounded-[12px] border border-[#222222] px-[14px] py-[11px] text-[12px] font-[400] text-[#FFFFFF] transition-colors hover:border-[#D4AF37] hover:text-[#D4AF37]"
               >
-                <div className={`w-[28px] h-[28px] rounded-[8px] bg-bg3 border flex items-center justify-center text-[14px] shrink-0 ${selectedCityId === city.id ? 'border-[rgba(0,208,132,0.3)]' : 'border-border'}`}>
-                  {CITY_FLAGS[city.cityKey] ?? '📍'}
-                </div>
-                <div className={`min-w-0 text-left text-[13px] font-[600] transition-colors ${selectedCityId === city.id ? 'text-text' : 'text-muted'}`}>
-                  {t(`cities.${city.cityKey}`)}
-                </div>
+                {t('home.openOrderHistory')}
               </button>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-r2 border border-border2 bg-bg2 px-[16px] py-[18px] text-center text-[13px] font-[500] text-muted">
-            {t('home.noCitiesFound')}
-          </div>
-        )}
-      </div>
+            </>
+          ) : (
+            <div className="mt-[12px] text-[14px] font-[400] leading-[1.7] text-[#9A9A9A]">
+              {t('home.historyEmpty')}
+            </div>
+          )}
+        </section>
 
-      {Number(giveAmount) > 0 && (isOverLimit || isEurInvalid || !!reserveMessage) && (
-        <div className="px-[16px] mt-[16px]">
-          <div className="bg-[rgba(248,113,113,0.1)] border border-[rgba(248,113,113,0.2)] rounded-r p-3 text-[12px] text-error">
-            {isOverLimit ? t('home.limitError') : reserveMessage ?? t('home.amountError')}
+        <section className="px-[8px] py-[4px]">
+          <div className="text-[11px] font-[400] uppercase tracking-[0.12em] text-[#9A9A9A]">{t('home.rateLabel')}</div>
+          <div className="mt-[10px] text-left text-[28px] font-[600] leading-[1.15] text-[#FFFFFF]">1 EUR = {rates.EUR_USDT.toFixed(4)} USDT</div>
+          <div className="mt-[8px] text-[12px] font-[400] text-[#9A9A9A]">{t('home.rateUpdated', { time: formattedRateUpdatedAt })}</div>
+        </section>
+
+        <section className="space-y-[12px] px-[8px] py-[4px] text-[14px]">
+          <div className="flex items-center justify-between gap-[12px]">
+            <span className="font-[400] text-[#9A9A9A]">{t('home.referralLabel')}</span>
+            <span className="text-right font-[600] text-[#FFFFFF]">
+              {profileSettings.activatedReferralCode || profileSettings.referralCode}
+            </span>
           </div>
-        </div>
-      )}
+          <div className="flex items-center justify-between gap-[12px]">
+            <span className="font-[400] text-[#9A9A9A]">{t('home.commissionLabel')}</span>
+            <span className="text-right font-[600] text-[#FFFFFF]">{benefits.effectiveCommissionPercent.toFixed(1)}%</span>
+          </div>
+          <div className="flex items-center justify-between gap-[12px]">
+            <span className="font-[400] text-[#9A9A9A]">{t('home.discountLabel')}</span>
+            <span className="text-right font-[600] text-[#FFFFFF]">{benefits.totalDiscountPercent.toFixed(1)}%</span>
+          </div>
+          <div className="flex items-center justify-between gap-[12px]">
+            <span className="font-[400] text-[#9A9A9A]">{t('home.reserveUsdt')}</span>
+            <span className="text-right font-[600] text-[#FFFFFF]">{usdtReserve.toFixed(0)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-[12px]">
+            <span className="font-[400] text-[#9A9A9A]">{t('home.reserveCash')}</span>
+            <span className="text-right font-[600] text-[#FFFFFF]">{totalCashReserve.toFixed(0)}€</span>
+          </div>
+        </section>
 
-      <div className="relative z-10 p-[16px_16px_0] mt-4">
-        <button
-          onClick={handleNext}
-          disabled={!isValid}
-          className={`w-full p-[18px] border-none rounded-r2 font-sans text-[15px] font-[700] cursor-pointer transition-all tracking-[0.02em] flex items-center justify-center gap-[8px] relative overflow-hidden active:scale-[0.985] disabled:opacity-35 disabled:cursor-not-allowed disabled:transform-none
-            ${isValid 
-              ? (direction === 'GIVE_CASH' 
-                ? 'bg-gradient-to-br from-[#F5A623] to-[#E08B00] text-[#0A0B0F] shadow-[0_8px_24px_rgba(245,166,35,0.25)]' 
-                : 'bg-gradient-to-br from-[#26A17B] to-[#1B7A5C] text-white shadow-[0_8px_24px_rgba(38,161,123,0.25)]')
-              : 'bg-bg3 text-muted'
-            }`}
-        >
-          {direction === 'GIVE_CASH' ? t('home.ctaCash') : t('home.ctaUsdt')}
-        </button>
-      </div>
-
-      <div className="relative z-10 grid grid-cols-2 gap-[8px] px-[16px] pt-[12px] pb-[20px]">
-        <button
-          type="button"
-          onClick={() => navigate('/orders')}
-          className="rounded-r border border-border2 bg-bg2 px-[12px] py-[12px] text-[11px] font-[700] uppercase tracking-[0.05em] text-text transition-colors hover:border-green hover:text-green"
-        >
-          {t('home.openOrderHistory')}
-        </button>
         <button
           type="button"
-          onClick={() => (latestUserOrder ? handleRepeatOrder(latestUserOrder.id) : navigate('/profile'))}
-          className="rounded-r border border-border2 bg-bg2 px-[12px] py-[12px] text-[11px] font-[700] uppercase tracking-[0.05em] text-text transition-colors hover:border-green hover:text-green"
+          onClick={handleOpenExchange}
+          className="w-full rounded-[12px] bg-[#D4AF37] px-[24px] py-[16px] text-[13px] font-[600] uppercase tracking-[0.08em] text-[#000000] transition-opacity hover:opacity-90"
         >
-          {latestUserOrder ? t('home.repeatOrder') : t('home.profileAction')}
+          {t('home.quickExchangeAction')}
         </button>
       </div>
-
     </motion.div>
   );
 }

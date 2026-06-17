@@ -100,7 +100,11 @@ function getDefaultCities() {
 function createDefaultState() {
   return {
     cities: getDefaultCities(),
-    rates: { EUR_USDT: 1.08 },
+    rates: {
+      EUR_USDT: 52.01 / 44.82,
+      UAH_USDT: 1 / 44.82,
+      EUR_UAH: 52.01,
+    },
     rateUpdatedAt: new Date().toISOString(),
     orders: [],
     usdtReserve: 2500,
@@ -124,6 +128,8 @@ function normalizeState(rawState) {
       : defaults.cities,
     rates: {
       EUR_USDT: Number(raw.rates?.EUR_USDT) || defaults.rates.EUR_USDT,
+      UAH_USDT: Number(raw.rates?.UAH_USDT) || defaults.rates.UAH_USDT,
+      EUR_UAH: Number(raw.rates?.EUR_UAH) || defaults.rates.EUR_UAH,
     },
     rateUpdatedAt: ensureString(raw.rateUpdatedAt) || defaults.rateUpdatedAt,
     orders: Array.isArray(raw.orders)
@@ -242,8 +248,10 @@ function formatStatus(status) {
   }
 }
 
-function formatDirection(direction) {
-  return direction === 'GIVE_CASH' ? 'Наличные EUR -> USDT' : 'USDT -> Наличные EUR';
+function formatDirection(order) {
+  const left = order.direction === 'GIVE_CASH' ? `Наличные ${order.giveCurrency}` : 'USDT';
+  const right = order.direction === 'GIVE_CASH' ? 'USDT' : `Наличные ${order.getCurrency}`;
+  return `${left} -> ${right}`;
 }
 
 function formatTelegramOrderMessage(order, isVerified) {
@@ -259,11 +267,11 @@ function formatTelegramOrderMessage(order, isVerified) {
 
 #${order.id}
 📍 <b>Статус:</b> ${formatStatus(order.status)}
-🔄 <b>Направление:</b> ${formatDirection(order.direction)}
+🔄 <b>Направление:</b> ${formatDirection(order)}
 🏙 <b>Город:</b> ${order.cityKey}
 💰 <b>Отдают:</b> ${order.giveAmount} ${order.giveCurrency}
 💸 <b>Получают:</b> ${order.getAmount} ${order.getCurrency}
-📊 <b>Курс клиента:</b> 1 EUR = ${order.rate} USDT
+📊 <b>Курс клиента:</b> 1 ${order.direction === 'GIVE_CASH' ? order.giveCurrency : order.getCurrency} = ${order.rate} USDT
 💎 <b>Комиссия:</b> ${order.commissionPercent.toFixed(1)}%
 🎁 <b>Скидка:</b> ${order.discountPercent.toFixed(1)}%
 🏷 <b>Рефкод:</b> ${referralLabel}

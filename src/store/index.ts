@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { ExchangeState, City, Rates, ExchangeOrder } from '../types';
+import { ExchangeState, City, ExchangeOrder } from '../types';
 import { generateReferralCode, getCommissionMultiplier } from '../lib/customer';
+import { DEFAULT_RATES, convertCashToUsdt, convertUsdtToCash } from '../lib/rates';
 
 type SharedServerState = Pick<
   ExchangeState,
@@ -37,10 +38,6 @@ const INITIAL_CITIES: City[] = [
   { id: '13', cityKey: 'nuremberg', isActive: true, limitEUR: 500, groupChatId: '' },
 ];
 
-const MOCK_RATES: Rates = {
-  EUR_USDT: 1.08, // 1 EUR = 1.08 USDT
-};
-
 const DEFAULT_CHECKOUT_PREFILL = {
   sourceOrderId: null,
   contact: '',
@@ -61,7 +58,7 @@ export const useStore = create<ExchangeState>()(
   persist(
     (set, get) => ({
       cities: INITIAL_CITIES,
-      rates: MOCK_RATES,
+      rates: DEFAULT_RATES,
       rateUpdatedAt: new Date().toISOString(),
       orders: [],
       usdtReserve: 2500,
@@ -74,14 +71,15 @@ export const useStore = create<ExchangeState>()(
       
       selectedCityId: null,
       direction: 'GIVE_CASH',
+      selectedCashCurrency: 'EUR',
       
       giveAmount: '',
       getAmount: '',
-      
-      updateCityLimit: async (id, limit) => {
+
+      saveCityConfig: async (id, config) => {
         const city = get().cities.find((item) => item.id === id);
         if (!city) {
-          return;
+          return false;
         }
 
         try {
@@ -89,45 +87,30 @@ export const useStore = create<ExchangeState>()(
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              limitEUR: limit,
-              groupChatId: city.groupChatId,
-              isActive: city.isActive,
+              limitEUR: config.limitEUR ?? city.limitEUR,
+              groupChatId: config.groupChatId ?? city.groupChatId,
+              isActive: config.isActive ?? city.isActive,
             }),
           });
           const data = await readJsonResponse<{ state: SharedServerState }>(response);
 
           if (response.ok && data?.state) {
             set({ ...data.state });
+            return true;
           }
         } catch (error) {
-          console.error('Failed to update city limit', error);
+          console.error('Failed to save city config', error);
         }
+
+        return false;
+      },
+      
+      updateCityLimit: async (id, limit) => {
+        await get().saveCityConfig(id, { limitEUR: limit });
       },
 
       updateCityGroupChatId: async (id, groupChatId) => {
-        const city = get().cities.find((item) => item.id === id);
-        if (!city) {
-          return;
-        }
-
-        try {
-          const response = await fetch(`/api/admin/cities/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              limitEUR: city.limitEUR,
-              groupChatId,
-              isActive: city.isActive,
-            }),
-          });
-          const data = await readJsonResponse<{ state: SharedServerState }>(response);
-
-          if (response.ok && data?.state) {
-            set({ ...data.state });
-          }
-        } catch (error) {
-          console.error('Failed to update city group chat id', error);
-        }
+        await get().saveCityConfig(id, { groupChatId });
       },
 
       updateUsdtReserve: async (amount) => {
@@ -231,29 +214,20 @@ export const useStore = create<ExchangeState>()(
         if (!city) {
           return;
         }
-
-        try {
-          const response = await fetch(`/api/admin/cities/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              limitEUR: city.limitEUR,
-              groupChatId: city.groupChatId,
-              isActive: !city.isActive,
-            }),
-          });
-          const data = await readJsonResponse<{ state: SharedServerState }>(response);
-
-          if (response.ok && data?.state) {
-            set({ ...data.state });
-          }
-        } catch (error) {
-          console.error('Failed to toggle city state', error);
-        }
+        await get().saveCityConfig(id, { isActive: !city.isActive });
       },
       
       setCity: (id) => set({ selectedCityId: id }),
       setDirection: (dir) => set({ direction: dir, giveAmount: '', getAmount: '' }),
+      setCashCurrency: (currency) => {
+        set({ selectedCashCurrency: currency });
+        const { giveAmount, getAmount } = get();
+        if (giveAmount) {
+          get().calculateGetAmount();
+        } else if (getAmount) {
+          get().calculateGiveAmount();
+        }
+      },
       
       setGiveAmount: (amount) => {
         set({ giveAmount: amount });
@@ -275,6 +249,12 @@ export const useStore = create<ExchangeState>()(
         return {
           selectedCityId: order.cityId,
           direction: order.direction,
+          selectedCashCurrency:
+            order.giveCurrency === 'EUR' || order.giveCurrency === 'UAH'
+              ? order.giveCurrency
+              : order.getCurrency === 'EUR' || order.getCurrency === 'UAH'
+                ? order.getCurrency
+                : state.selectedCashCurrency,
           giveAmount: order.giveAmount,
           getAmount: order.getAmount,
           checkoutPrefill: {
@@ -302,7 +282,7 @@ export const useStore = create<ExchangeState>()(
               ? Math.max(0, state.usdtReserve - Number(order.getAmount))
               : state.usdtReserve,
           cities:
-            order.direction === 'GIVE_USDT'
+            order.direction === 'GIVE_USDT' && order.getCurrency === 'EUR'
               ? state.cities.map((city) =>
                   city.id === order.cityId
                     ? { ...city, limitEUR: Math.max(0, city.limitEUR - Number(order.getAmount)) }
@@ -352,7 +332,7 @@ export const useStore = create<ExchangeState>()(
       },
       
       calculateGetAmount: () => {
-        const { giveAmount, direction, rates, commissionPercent } = get();
+        const { giveAmount, direction, selectedCashCurrency, rates, commissionPercent } = get();
         if (!giveAmount || isNaN(Number(giveAmount))) {
           set({ getAmount: '' });
           return;
@@ -368,20 +348,20 @@ export const useStore = create<ExchangeState>()(
         const multiplier = getCommissionMultiplier(commissionPercent);
 
         if (direction === 'GIVE_CASH') {
-          // Buy USDT with EUR. Client gets less USDT because of 4% fee
-          result = (amount * rates.EUR_USDT) * multiplier;
+          result = convertCashToUsdt(amount, selectedCashCurrency, rates) * multiplier;
           set({ getAmount: result > 0 ? result.toFixed(2) : '' });
         } else {
-          // Sell USDT for EUR. Client gets less EUR because of 4% fee
-          result = (amount / rates.EUR_USDT) * multiplier;
-          // Round EUR to nearest 10
-          result = Math.floor(result / 10) * 10;
+          result = convertUsdtToCash(amount, selectedCashCurrency, rates) * multiplier;
+          result =
+            selectedCashCurrency === 'EUR'
+              ? Math.floor(result / 10) * 10
+              : Math.floor(result);
           set({ getAmount: result > 0 ? result.toString() : '' });
         }
       },
       
       calculateGiveAmount: () => {
-        const { getAmount, direction, rates, commissionPercent } = get();
+        const { getAmount, direction, selectedCashCurrency, rates, commissionPercent } = get();
         if (!getAmount || isNaN(Number(getAmount))) {
           set({ giveAmount: '' });
           return;
@@ -393,11 +373,12 @@ export const useStore = create<ExchangeState>()(
         const multiplier = getCommissionMultiplier(commissionPercent);
 
         if (direction === 'GIVE_CASH') {
-          result = amount / (rates.EUR_USDT * multiplier);
+          const baseRate = selectedCashCurrency === 'UAH' ? rates.UAH_USDT : rates.EUR_USDT;
+          result = amount / (baseRate * multiplier);
           set({ giveAmount: result > 0 ? result.toFixed(2) : '' });
         } else {
-          result = (amount * rates.EUR_USDT) / multiplier;
-          // When giving USDT to get exact EUR, round the required USDT to 2 decimals
+          const baseRate = selectedCashCurrency === 'UAH' ? rates.UAH_USDT : rates.EUR_USDT;
+          result = (amount * baseRate) / multiplier;
           set({ giveAmount: result > 0 ? result.toFixed(2) : '' });
         }
       },
@@ -425,7 +406,7 @@ export const useStore = create<ExchangeState>()(
     }),
     {
       name: 'cryptobull-storage',
-      version: 9,
+      version: 10,
       // Persist core admin and order data, reset user inputs on reload
       partialize: (state) => ({
         cities: state.cities,
@@ -463,6 +444,10 @@ export const useStore = create<ExchangeState>()(
             referralCodeUsed: order.referralCodeUsed ?? null,
           })),
           usdtReserve: state.usdtReserve ?? 2500,
+          rates: {
+            ...DEFAULT_RATES,
+            ...(state.rates ?? {}),
+          },
           rateUpdatedAt: state.rateUpdatedAt ?? new Date().toISOString(),
           antiPhishingCode: state.antiPhishingCode ?? DEFAULT_ANTI_PHISHING_CODE,
           profileSettings: {

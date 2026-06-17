@@ -6,6 +6,7 @@ import WebApp from '@twa-dev/sdk';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useI18n } from '../i18n';
 import type { ExchangeDirection, OrderStatus } from '../types';
+import { DEFAULT_RATES, convertCurrencyToEur } from '../lib/rates';
 
 export default function Admin() {
   const navigate = useNavigate();
@@ -18,12 +19,10 @@ export default function Admin() {
     usdtReserve,
     antiPhishingCode,
     profileSettings,
-    updateCityLimit,
-    updateCityGroupChatId,
+    saveCityConfig,
     updateUsdtReserve,
     updateRate,
     updateAntiPhishingCode,
-    toggleCityActive,
     updateOrderStatus,
     updateOrderManager,
   } = useStore();
@@ -33,7 +32,7 @@ export default function Admin() {
     ? `@${user.username}`
     : [user?.first_name, user?.last_name].filter(Boolean).join(' ') || t('checkout.unknownUser');
   const managerSelfName = profileSettings.displayName.trim() || managerFallbackName;
-  const adminIds = (import.meta.env.VITE_ADMIN_IDS || '').split(',').map(id => id.trim());
+  const adminIds = (import.meta.env.VITE_ADMIN_IDS || '').split(',').map((id: string) => id.trim());
   const isAdmin = user?.id ? adminIds.includes(user.id.toString()) : false;
 
   const [editLimits, setEditLimits] = useState<Record<string, string>>(
@@ -53,6 +52,7 @@ export default function Admin() {
   const [cityFilter, setCityFilter] = useState<'all' | string>('all');
   const [directionFilter, setDirectionFilter] = useState<'all' | ExchangeDirection>('all');
   const [onlyMyOrders, setOnlyMyOrders] = useState(false);
+  const [citySaveState, setCitySaveState] = useState<Record<string, 'idle' | 'saving' | 'saved' | 'error'>>({});
 
   useEffect(() => {
     setEditLimits(cities.reduce((acc, city) => ({ ...acc, [city.id]: city.limitEUR.toString() }), {}));
@@ -105,7 +105,9 @@ export default function Admin() {
 
     orders.forEach((order) => {
       const existing = stats.get(order.userHandle);
-      const eurAmount = order.giveCurrency === 'EUR' ? Number(order.giveAmount) : Number(order.getAmount);
+      const eurAmount = order.giveCurrency === 'EUR' || order.giveCurrency === 'UAH'
+        ? convertCurrencyToEur(Number(order.giveAmount), order.giveCurrency, DEFAULT_RATES)
+        : convertCurrencyToEur(Number(order.getAmount), order.getCurrency, DEFAULT_RATES);
 
       if (!existing) {
         stats.set(order.userHandle, {
@@ -146,17 +148,37 @@ export default function Admin() {
   const handleSave = async (id: string) => {
     WebApp.HapticFeedback.impactOccurred('medium');
     const newLimit = Number(editLimits[id]) || 0;
-    await updateCityLimit(id, newLimit);
+    setCitySaveState((prev) => ({ ...prev, [id]: 'saving' }));
+    const ok = await saveCityConfig(id, {
+      limitEUR: newLimit,
+      groupChatId: editGroupChatIds[id] ?? '',
+    });
+    setCitySaveState((prev) => ({ ...prev, [id]: ok ? 'saved' : 'error' }));
   };
 
   const handleSaveGroupChatId = async (id: string) => {
     WebApp.HapticFeedback.impactOccurred('medium');
-    await updateCityGroupChatId(id, editGroupChatIds[id] ?? '');
+    setCitySaveState((prev) => ({ ...prev, [id]: 'saving' }));
+    const ok = await saveCityConfig(id, {
+      limitEUR: Number(editLimits[id]) || 0,
+      groupChatId: editGroupChatIds[id] ?? '',
+    });
+    setCitySaveState((prev) => ({ ...prev, [id]: ok ? 'saved' : 'error' }));
   };
 
   const handleToggle = async (id: string) => {
     WebApp.HapticFeedback.selectionChanged();
-    await toggleCityActive(id);
+    const city = cities.find((item) => item.id === id);
+    if (!city) {
+      return;
+    }
+    setCitySaveState((prev) => ({ ...prev, [id]: 'saving' }));
+    const ok = await saveCityConfig(id, {
+      limitEUR: Number(editLimits[id]) || city.limitEUR,
+      groupChatId: editGroupChatIds[id] ?? city.groupChatId,
+      isActive: !city.isActive,
+    });
+    setCitySaveState((prev) => ({ ...prev, [id]: ok ? 'saved' : 'error' }));
   };
 
   const handleClaimOrder = async (orderId: string) => {
@@ -248,6 +270,21 @@ export default function Admin() {
 
                 <div className="mt-[8px] text-[11px] font-[500] text-dim">
                   {t('admin.cityGroupHint')}
+                </div>
+                <div className={`mt-[6px] text-[11px] font-[600] ${
+                  citySaveState[city.id] === 'saved'
+                    ? 'text-green'
+                    : citySaveState[city.id] === 'error'
+                      ? 'text-error'
+                      : 'text-dim'
+                }`}>
+                  {citySaveState[city.id] === 'saving'
+                    ? t('admin.citySaving')
+                    : citySaveState[city.id] === 'saved'
+                      ? t('admin.citySaved')
+                      : citySaveState[city.id] === 'error'
+                        ? t('admin.citySaveError')
+                        : t('admin.citySaveIdle')}
                 </div>
 
               </div>

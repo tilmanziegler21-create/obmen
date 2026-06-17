@@ -1,4 +1,5 @@
 import type { ExchangeDirection, ExchangeOrder, LoyaltyTier } from '../types';
+import { DEFAULT_RATES, convertCurrencyToEur } from './rates';
 
 export interface CustomerMetrics {
   deals: number;
@@ -39,7 +40,9 @@ export function calculateCustomerMetrics(orders: ExchangeOrder[], userHandle: st
 
   return userOrders.reduce<CustomerMetrics>(
     (acc, order) => {
-      const eurAmount = order.giveCurrency === 'EUR' ? Number(order.giveAmount) : Number(order.getAmount);
+      const eurAmount = order.giveCurrency === 'EUR' || order.giveCurrency === 'UAH'
+        ? convertCurrencyToEur(Number(order.giveAmount), order.giveCurrency, DEFAULT_RATES)
+        : convertCurrencyToEur(Number(order.getAmount), order.getCurrency, DEFAULT_RATES);
       const isProviderDeal = order.direction === 'GIVE_USDT';
 
       return {
