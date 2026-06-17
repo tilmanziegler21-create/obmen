@@ -384,19 +384,18 @@ export default function Exchange() {
       </motion.div>
 
       {activeAssetSheet && (
-        <div className="fixed inset-0 z-40 flex items-end bg-[rgba(0,0,0,0.7)]">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-[rgba(0,0,0,0.7)] px-[16px]">
           <button
             type="button"
             aria-label="Close asset sheet"
             onClick={() => setActiveAssetSheet(null)}
             className="absolute inset-0"
           />
-          <div className="relative w-full rounded-t-[24px] border-t border-[#222222] bg-[#111111] px-[24px] pb-[32px] pt-[16px]">
-            <div className="mx-auto h-[4px] w-[40px] rounded-full bg-[#222222]"></div>
-            <div className="mt-[16px] text-[12px] font-[400] uppercase tracking-[0.12em] text-[#9A9A9A]">
+          <div className="relative w-full max-w-[380px] rounded-[16px] border border-[#222222] bg-[#111111] px-[20px] py-[20px] shadow-[0_24px_64px_rgba(0,0,0,0.45)]">
+            <div className="text-[12px] font-[400] uppercase tracking-[0.12em] text-[#9A9A9A]">
               {activeAssetSheet === 'give' ? t('home.youGive') : t('checkout.youGet')}
             </div>
-            <div className="mt-[16px] space-y-[8px]">
+            <div className="mt-[14px] grid grid-cols-3 gap-[8px]">
               {assetOptions.map((asset) => {
                 const isSelected = (activeAssetSheet === 'give' ? giveCurrency : getCurrency) === asset.code;
 
@@ -405,12 +404,10 @@ export default function Exchange() {
                     key={asset.code}
                     type="button"
                     onClick={() => handleSelectAsset(activeAssetSheet, asset.code)}
-                    className={`flex w-full items-center rounded-[12px] px-[16px] py-[16px] text-left ${isSelected ? 'bg-[#1A1A1A]' : 'bg-[#151515]'}`}
+                    className={`flex min-h-[84px] w-full flex-col items-center justify-center gap-[8px] rounded-[12px] px-[10px] py-[14px] text-center transition-colors ${isSelected ? 'bg-[#1A1A1A]' : 'bg-[#151515] hover:bg-[#1A1A1A]'}`}
                   >
-                    <div className="flex items-center gap-[12px]">
-                      <AssetIcon asset={asset.code} />
-                      <span className="text-[15px] font-[600] text-[#FFFFFF]">{asset.label}</span>
-                    </div>
+                    <AssetIcon asset={asset.code} />
+                    <span className="text-[14px] font-[600] text-[#FFFFFF]">{asset.label}</span>
                   </button>
                 );
               })}
