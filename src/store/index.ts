@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import WebApp from '@twa-dev/sdk';
 import { ExchangeState, City, ExchangeOrder, type ExchangeAsset, type SaveResult } from '../types';
 import { generateReferralCode, getCommissionMultiplier } from '../lib/customer';
 import { DEFAULT_RATES, convertBetweenAssets, getAssetConversionRate, roundAmountForAsset } from '../lib/rates';
@@ -66,7 +67,6 @@ export const useStore = create<ExchangeState>()(
       usdtReserve: 2500,
       antiPhishingCode: DEFAULT_ANTI_PHISHING_CODE,
       profileSettings: DEFAULT_PROFILE_SETTINGS,
-      reviews: [],
       commissionPercent: 4,
       checkoutPrefill: DEFAULT_CHECKOUT_PREFILL,
       isLoading: false,
@@ -88,7 +88,10 @@ export const useStore = create<ExchangeState>()(
         try {
           const response = await fetch(`/api/admin/cities/${id}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'X-Telegram-Init-Data': WebApp.initData || '',
+            },
             body: JSON.stringify({
               limitEUR: config.limitEUR ?? city.limitEUR,
               isActive: config.isActive ?? city.isActive,
@@ -122,7 +125,10 @@ export const useStore = create<ExchangeState>()(
         try {
           const response = await fetch('/api/admin/settings', {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'X-Telegram-Init-Data': WebApp.initData || '',
+            },
             body: JSON.stringify({ usdtReserve: amount }),
           });
           const data = await readJsonResponse<{ state: SharedServerState }>(response);
@@ -139,7 +145,10 @@ export const useStore = create<ExchangeState>()(
         try {
           const response = await fetch('/api/admin/settings', {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'X-Telegram-Init-Data': WebApp.initData || '',
+            },
             body: JSON.stringify({ rate }),
           });
           const data = await readJsonResponse<{ state: SharedServerState }>(response);
@@ -156,7 +165,10 @@ export const useStore = create<ExchangeState>()(
         try {
           const response = await fetch('/api/admin/settings', {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'X-Telegram-Init-Data': WebApp.initData || '',
+            },
             body: JSON.stringify({ antiPhishingCode: code.trim() || DEFAULT_ANTI_PHISHING_CODE }),
           });
           const data = await readJsonResponse<{ state: SharedServerState }>(response);
@@ -196,23 +208,6 @@ export const useStore = create<ExchangeState>()(
           get().calculateGiveAmount();
         }
       },
-
-      addReview: (review) =>
-        set((state) => ({
-          reviews: [
-            {
-              ...review,
-              id: `RV-${Date.now().toString().slice(-8)}`,
-              createdAt: new Date().toISOString(),
-            },
-            ...state.reviews,
-          ].slice(0, 20),
-        })),
-
-      removeReview: (id) =>
-        set((state) => ({
-          reviews: state.reviews.filter((review) => review.id !== id),
-        })),
       
       toggleCityActive: async (id) => {
         const city = get().cities.find((item) => item.id === id);
@@ -329,7 +324,10 @@ export const useStore = create<ExchangeState>()(
         try {
           const response = await fetch(`/api/admin/orders/${id}`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'X-Telegram-Init-Data': WebApp.initData || '',
+            },
             body: JSON.stringify({ status }),
           });
           const data = await readJsonResponse<{ state: SharedServerState }>(response);
@@ -346,7 +344,10 @@ export const useStore = create<ExchangeState>()(
         try {
           const response = await fetch(`/api/admin/orders/${id}`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'X-Telegram-Init-Data': WebApp.initData || '',
+            },
             body: JSON.stringify({
               managerName: managerName && managerName.trim().length > 0 ? managerName.trim() : null,
             }),
@@ -428,7 +429,6 @@ export const useStore = create<ExchangeState>()(
         usdtReserve: state.usdtReserve,
         antiPhishingCode: state.antiPhishingCode,
         profileSettings: state.profileSettings,
-        reviews: state.reviews,
       }),
       migrate: (persistedState) => {
         const state = persistedState as ExchangeState & {
@@ -438,7 +438,6 @@ export const useStore = create<ExchangeState>()(
           rateUpdatedAt?: string;
           antiPhishingCode?: string;
           profileSettings?: Partial<ExchangeState['profileSettings']>;
-          reviews?: ExchangeState['reviews'];
         };
 
         if (!state?.cities) {
@@ -468,7 +467,6 @@ export const useStore = create<ExchangeState>()(
             ...DEFAULT_PROFILE_SETTINGS,
             ...(state.profileSettings ?? {}),
           },
-          reviews: state.reviews ?? [],
           commissionPercent: 4,
           cities: state.cities.map((city) => {
             const legacyCity = city as City & { name?: string };

@@ -88,7 +88,6 @@ export interface ExchangeState {
   usdtReserve: number;
   antiPhishingCode: string;
   profileSettings: ProfileSettings;
-  reviews: Review[];
   commissionPercent: number;
   checkoutPrefill: CheckoutPrefill;
   isLoading: boolean;
@@ -111,8 +110,6 @@ export interface ExchangeState {
   updateAntiPhishingCode: (code: string) => Promise<void>;
   updateProfileSettings: (settings: Partial<ProfileSettings>) => void;
   setCommissionPercent: (value: number) => void;
-  addReview: (review: Omit<Review, 'id' | 'createdAt'>) => void;
-  removeReview: (id: string) => void;
   toggleCityActive: (id: string) => Promise<void>;
   setCity: (id: string) => void;
   setDirection: (dir: ExchangeDirection) => void;

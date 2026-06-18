@@ -95,6 +95,32 @@ function getTelegramUserFromInitData(initData) {
   }
 }
 
+function requireAdmin(req, res, next) {
+  if (!requireTelegramInit) {
+    return next();
+  }
+
+  const telegramInitData = req.headers['x-telegram-init-data'] || req.body?.telegramInitData;
+  if (!telegramInitData) {
+    return res.status(401).json({ error: 'Telegram initData is required' });
+  }
+
+  const isVerified = verifyTelegramInitData(telegramInitData, botToken);
+  if (!isVerified) {
+    return res.status(401).json({ error: 'Invalid Telegram initData' });
+  }
+
+  const telegramUser = getTelegramUserFromInitData(telegramInitData);
+  const userId = telegramUser?.id ? String(telegramUser.id) : null;
+  const isAdmin = userId ? adminIds.has(userId) : false;
+
+  if (!isAdmin) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  next();
+}
+
 function ensureString(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
@@ -531,7 +557,7 @@ app.post('/api/admin/access', (req, res) => {
   });
 });
 
-app.put('/api/admin/cities/:id', (req, res) => {
+app.put('/api/admin/cities/:id', requireAdmin, (req, res) => {
   try {
     const state = readState();
     const city = state.cities.find((item) => item.id === req.params.id);
@@ -592,7 +618,7 @@ app.patch('/api/admin/settings', (req, res) => {
   res.json({ ok: true, state: getPublicState(state) });
 });
 
-app.patch('/api/admin/orders/:id', async (req, res) => {
+app.patch('/api/admin/orders/:id', requireAdmin, async (req, res) => {
   const state = readState();
   const existingOrder = state.orders.find((order) => order.id === req.params.id);
 
