@@ -388,21 +388,37 @@ async function callTelegram(method, payload) {
   const url = `https://api.telegram.org/bot${botToken}/${method}`;
   console.log(`[Telegram API] Calling ${url} with payload:`, JSON.stringify(payload));
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  
-  const data = await response.json().catch(() => ({}));
-  console.log(`[Telegram API] Response from ${method}:`, JSON.stringify(data));
+  const controller = new AbortController();
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, 10000); // 10 seconds timeout
 
-  if (!response.ok || data.ok === false) {
-    const errorMessage = typeof data.description === 'string' ? data.description : 'Telegram API error';
-    throw new Error(errorMessage);
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeout);
+    
+    const data = await response.json().catch(() => ({}));
+    console.log(`[Telegram API] Response from ${method}:`, JSON.stringify(data));
+
+    if (!response.ok || data.ok === false) {
+      const errorMessage = typeof data.description === 'string' ? data.description : 'Telegram API error';
+      throw new Error(errorMessage);
+    }
+
+    return data.result;
+  } catch (error) {
+    clearTimeout(timeout);
+    if (error.name === 'AbortError') {
+      throw new Error('Telegram API timeout (10s)');
+    }
+    throw error;
   }
-
-  return data.result;
 }
 
 async function sendTelegramMessage(chatId, message, replyMarkup) {
@@ -692,7 +708,7 @@ app.post('/api/orders', async (req, res) => {
   }
 
   const isVerified = telegramInitData ? verifyTelegramInitData(telegramInitData, botToken) : false;
-  if (telegramInitData && !isVerified) {
+  if (telegramInitData && !isVerified && requireTelegramInit) {
     res.status(401).json({ error: 'Invalid Telegram initData' });
     return;
   }

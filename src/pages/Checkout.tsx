@@ -44,11 +44,8 @@ export default function Checkout() {
   const requiresWallet = selectedGetAsset === 'USDT';
   const requiresContact = selectedGetAsset === 'EUR_CASH';
   const requiresCardNumber = selectedGiveAsset === 'UAH_CARD' || selectedGetAsset === 'UAH_CARD';
-  const requiredUsdtReserve = selectedGetAsset === 'USDT' ? Number(getAmount) : 0;
-  const isReserveBlocked =
-    !city ||
-    !city.isActive ||
-    (selectedGetAsset === 'USDT' && requiredUsdtReserve > usdtReserve);
+  // Remove reserve checking since we allow all amounts now
+  const isReserveBlocked = !city || !city.isActive;
   const metrics = useMemo(
     () => calculateCustomerMetrics(orders, userHandle, currentUserId),
     [currentUserId, orders, userHandle],

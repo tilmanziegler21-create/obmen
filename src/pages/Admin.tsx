@@ -557,7 +557,7 @@ export default function Admin() {
                         <div className="rounded-[8px] border border-border2 bg-bg3 px-[10px] py-[8px]">
                           <div className="text-[10px] font-[600] uppercase tracking-[0.05em] text-muted">{t('home.clientSince')}</div>
                           <div className="mt-[4px] text-[11px] font-[700] text-text">
-                            {new Date(clientStats.firstOrderAt).toLocaleDateString(language, { month: 'short', year: 'numeric' })}
+                            {new Date(clientStats.firstOrderAt).toLocaleDateString([], { month: 'short', year: 'numeric' })}
                           </div>
                         </div>
                       </div>

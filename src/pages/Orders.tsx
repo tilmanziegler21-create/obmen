@@ -135,7 +135,7 @@ export default function Orders() {
                   <div className="flex items-start justify-between gap-[16px]">
                     <div className="min-w-0">
                       <div className="text-[13px] font-[600] text-[#FFFFFF]">
-                        {new Date(order.createdAt).toLocaleString(language)}
+                        {new Date(order.createdAt).toLocaleString()}
                       </div>
                       <div className="mt-[6px] text-[13px] font-[400] text-[#808080]">
                         {order.giveCurrency} {'->'} {order.getCurrency}
