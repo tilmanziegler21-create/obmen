@@ -169,7 +169,7 @@ const dictionaries: Record<Language, TranslationDictionary> = {
     admin: {
       accessDenied: 'Доступ запрещен',
       title: 'Панель администратора',
-      cashManagement: 'Управление кассами',
+      cityManagement: 'Настройки городов',
       reserveManagement: 'Управление резервами',
       rateManagement: 'Управление курсом',
       ordersTitle: 'Заявки',
@@ -206,7 +206,7 @@ const dictionaries: Record<Language, TranslationDictionary> = {
       securityCodeTitle: 'Anti-Phishing код',
       securityCodeHint: 'Этот код показывается клиенту в интерфейсе и в Telegram-уведомлениях как подтверждение официального сообщения.',
       securityCodePlaceholder: 'Например BULL',
-      eurOnly: 'EUR Only',
+      citySaveError: 'Не удалось сохранить настройки города: {{message}}',
       active: 'Активен',
       disabled: 'Отключен',
       cityGroupPlaceholder: 'ID Telegram-группы, например -1001234567890',
@@ -214,7 +214,6 @@ const dictionaries: Record<Language, TranslationDictionary> = {
       citySaveIdle: 'Сохраните лимит или группу, чтобы применить настройки города.',
       citySaving: 'Сохраняем настройки города...',
       citySaved: 'Настройки города сохранены.',
-      citySaveError: 'Не удалось сохранить настройки города.',
       save: 'Сохранить',
     },
     profile: {
@@ -307,8 +306,8 @@ const dictionaries: Record<Language, TranslationDictionary> = {
       client: 'Telegram клиента:',
     },
     directions: {
-      giveCash: 'Наличные EUR -> USDT',
-      giveUsdt: 'USDT -> Наличные EUR',
+      eurToUsdt: 'EUR -> USDT',
+      usdtToEur: 'USDT -> EUR',
     },
   },
   en: {
@@ -461,7 +460,7 @@ const dictionaries: Record<Language, TranslationDictionary> = {
     admin: {
       accessDenied: 'Access denied',
       title: 'Admin panel',
-      cashManagement: 'Cash management',
+      cityManagement: 'City settings',
       reserveManagement: 'Reserve management',
       rateManagement: 'Rate management',
       ordersTitle: 'Orders',
@@ -498,7 +497,7 @@ const dictionaries: Record<Language, TranslationDictionary> = {
       securityCodeTitle: 'Anti-phishing code',
       securityCodeHint: 'This code is shown to the client in the app and in Telegram notifications to confirm official messages.',
       securityCodePlaceholder: 'For example BULL',
-      eurOnly: 'EUR Only',
+      citySaveError: 'Failed to save city settings: {{message}}',
       active: 'Active',
       disabled: 'Disabled',
       cityGroupPlaceholder: 'Telegram group ID, for example -1001234567890',
@@ -506,7 +505,6 @@ const dictionaries: Record<Language, TranslationDictionary> = {
       citySaveIdle: 'Save the limit or group to apply city settings.',
       citySaving: 'Saving city settings...',
       citySaved: 'City settings saved.',
-      citySaveError: 'Failed to save city settings.',
       save: 'Save',
     },
     profile: {
@@ -599,8 +597,8 @@ const dictionaries: Record<Language, TranslationDictionary> = {
       client: 'Client Telegram:',
     },
     directions: {
-      giveCash: 'Cash EUR -> USDT',
-      giveUsdt: 'USDT -> Cash EUR',
+      eurToUsdt: 'EUR -> USDT',
+      usdtToEur: 'USDT -> EUR',
     },
   },
   uk: {
@@ -753,7 +751,7 @@ const dictionaries: Record<Language, TranslationDictionary> = {
     admin: {
       accessDenied: 'Доступ заборонено',
       title: 'Панель адміністратора',
-      cashManagement: 'Керування касами',
+      cityManagement: 'Налаштування міст',
       reserveManagement: 'Керування резервами',
       rateManagement: 'Керування курсом',
       ordersTitle: 'Заявки',
@@ -790,7 +788,7 @@ const dictionaries: Record<Language, TranslationDictionary> = {
       securityCodeTitle: 'Anti-Phishing код',
       securityCodeHint: 'Цей код показується клієнту в інтерфейсі та в Telegram-сповіщеннях як підтвердження офіційного повідомлення.',
       securityCodePlaceholder: 'Наприклад BULL',
-      eurOnly: 'EUR Only',
+      citySaveError: 'Не вдалося зберегти налаштування міста: {{message}}',
       active: 'Активний',
       disabled: 'Вимкнений',
       cityGroupPlaceholder: 'ID Telegram-групи, наприклад -1001234567890',
@@ -798,7 +796,6 @@ const dictionaries: Record<Language, TranslationDictionary> = {
       citySaveIdle: 'Збережіть ліміт або групу, щоб застосувати налаштування міста.',
       citySaving: 'Зберігаємо налаштування міста...',
       citySaved: 'Налаштування міста збережено.',
-      citySaveError: 'Не вдалося зберегти налаштування міста.',
       save: 'Зберегти',
     },
     profile: {
@@ -891,8 +888,8 @@ const dictionaries: Record<Language, TranslationDictionary> = {
       client: 'Telegram клієнта:',
     },
     directions: {
-      giveCash: 'Готівка EUR -> USDT',
-      giveUsdt: 'USDT -> Готівка EUR',
+      eurToUsdt: 'EUR -> USDT',
+      usdtToEur: 'USDT -> EUR',
     },
   },
   de: {
@@ -1045,7 +1042,7 @@ const dictionaries: Record<Language, TranslationDictionary> = {
     admin: {
       accessDenied: 'Zugriff verweigert',
       title: 'Admin-Panel',
-      cashManagement: 'Kassenverwaltung',
+      cityManagement: 'Stadteinstellungen',
       reserveManagement: 'Reserveverwaltung',
       rateManagement: 'Kursverwaltung',
       ordersTitle: 'Anfragen',
@@ -1082,7 +1079,7 @@ const dictionaries: Record<Language, TranslationDictionary> = {
       securityCodeTitle: 'Anti-Phishing-Code',
       securityCodeHint: 'Dieser Code wird dem Kunden in der App und in Telegram-Benachrichtigungen als Bestatigung offizieller Nachrichten angezeigt.',
       securityCodePlaceholder: 'Zum Beispiel BULL',
-      eurOnly: 'EUR Only',
+      citySaveError: 'Stadteinstellungen konnten nicht gespeichert werden: {{message}}',
       active: 'Aktiv',
       disabled: 'Deaktiviert',
       cityGroupPlaceholder: 'Telegram-Gruppen-ID, zum Beispiel -1001234567890',
@@ -1090,7 +1087,6 @@ const dictionaries: Record<Language, TranslationDictionary> = {
       citySaveIdle: 'Speichern Sie Limit oder Gruppe, um die Stadteinstellungen zu uebernehmen.',
       citySaving: 'Stadteinstellungen werden gespeichert...',
       citySaved: 'Stadteinstellungen gespeichert.',
-      citySaveError: 'Stadteinstellungen konnten nicht gespeichert werden.',
       save: 'Speichern',
     },
     profile: {
@@ -1183,8 +1179,8 @@ const dictionaries: Record<Language, TranslationDictionary> = {
       client: 'Telegram des Kunden:',
     },
     directions: {
-      giveCash: 'Bargeld EUR -> USDT',
-      giveUsdt: 'USDT -> Bargeld EUR',
+      eurToUsdt: 'EUR -> USDT',
+      usdtToEur: 'USDT -> EUR',
     },
   },
 };

@@ -185,6 +185,14 @@ function writeState(state) {
   fs.writeFileSync(statePath, JSON.stringify(normalizeState(state), null, 2), 'utf8');
 }
 
+function getErrorMessage(error) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return 'Unknown server error';
+}
+
 function getPublicState(state) {
   return {
     cities: state.cities,
@@ -492,20 +500,25 @@ app.post('/api/admin/access', (req, res) => {
 });
 
 app.put('/api/admin/cities/:id', (req, res) => {
-  const state = readState();
-  const city = state.cities.find((item) => item.id === req.params.id);
+  try {
+    const state = readState();
+    const city = state.cities.find((item) => item.id === req.params.id);
 
-  if (!city) {
-    res.status(404).json({ error: 'City not found' });
-    return;
+    if (!city) {
+      res.status(404).json({ error: 'City not found' });
+      return;
+    }
+
+    city.limitEUR = Math.max(0, Number(req.body?.limitEUR) || 0);
+    city.groupChatId = ensureString(req.body?.groupChatId);
+    city.isActive = req.body?.isActive !== false;
+
+    writeState(state);
+    res.json({ ok: true, state: getPublicState(state) });
+  } catch (error) {
+    console.error('Failed to save city settings', error);
+    res.status(500).json({ error: getErrorMessage(error) });
   }
-
-  city.limitEUR = Math.max(0, Number(req.body?.limitEUR) || 0);
-  city.groupChatId = ensureString(req.body?.groupChatId);
-  city.isActive = req.body?.isActive !== false;
-
-  writeState(state);
-  res.json({ ok: true, state: getPublicState(state) });
 });
 
 app.patch('/api/admin/settings', (req, res) => {

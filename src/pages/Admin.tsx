@@ -54,6 +54,7 @@ export default function Admin() {
   const [directionFilter, setDirectionFilter] = useState<'all' | ExchangeDirection>('all');
   const [onlyMyOrders, setOnlyMyOrders] = useState(false);
   const [citySaveState, setCitySaveState] = useState<Record<string, 'idle' | 'saving' | 'saved' | 'error'>>({});
+  const [citySaveErrorMessage, setCitySaveErrorMessage] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setEditLimits(cities.reduce((acc, city) => ({ ...acc, [city.id]: city.limitEUR.toString() }), {}));
@@ -150,21 +151,29 @@ export default function Admin() {
     WebApp.HapticFeedback.impactOccurred('medium');
     const newLimit = Number(editLimits[id]) || 0;
     setCitySaveState((prev) => ({ ...prev, [id]: 'saving' }));
-    const ok = await saveCityConfig(id, {
+    setCitySaveErrorMessage((prev) => ({ ...prev, [id]: '' }));
+    const result = await saveCityConfig(id, {
       limitEUR: newLimit,
       groupChatId: editGroupChatIds[id] ?? '',
     });
-    setCitySaveState((prev) => ({ ...prev, [id]: ok ? 'saved' : 'error' }));
+    setCitySaveState((prev) => ({ ...prev, [id]: result.ok ? 'saved' : 'error' }));
+    if (!result.ok) {
+      setCitySaveErrorMessage((prev) => ({ ...prev, [id]: result.error ?? '' }));
+    }
   };
 
   const handleSaveGroupChatId = async (id: string) => {
     WebApp.HapticFeedback.impactOccurred('medium');
     setCitySaveState((prev) => ({ ...prev, [id]: 'saving' }));
-    const ok = await saveCityConfig(id, {
+    setCitySaveErrorMessage((prev) => ({ ...prev, [id]: '' }));
+    const result = await saveCityConfig(id, {
       limitEUR: Number(editLimits[id]) || 0,
       groupChatId: editGroupChatIds[id] ?? '',
     });
-    setCitySaveState((prev) => ({ ...prev, [id]: ok ? 'saved' : 'error' }));
+    setCitySaveState((prev) => ({ ...prev, [id]: result.ok ? 'saved' : 'error' }));
+    if (!result.ok) {
+      setCitySaveErrorMessage((prev) => ({ ...prev, [id]: result.error ?? '' }));
+    }
   };
 
   const handleToggle = async (id: string) => {
@@ -174,12 +183,16 @@ export default function Admin() {
       return;
     }
     setCitySaveState((prev) => ({ ...prev, [id]: 'saving' }));
-    const ok = await saveCityConfig(id, {
+    setCitySaveErrorMessage((prev) => ({ ...prev, [id]: '' }));
+    const result = await saveCityConfig(id, {
       limitEUR: Number(editLimits[id]) || city.limitEUR,
       groupChatId: editGroupChatIds[id] ?? city.groupChatId,
       isActive: !city.isActive,
     });
-    setCitySaveState((prev) => ({ ...prev, [id]: ok ? 'saved' : 'error' }));
+    setCitySaveState((prev) => ({ ...prev, [id]: result.ok ? 'saved' : 'error' }));
+    if (!result.ok) {
+      setCitySaveErrorMessage((prev) => ({ ...prev, [id]: result.error ?? '' }));
+    }
   };
 
   const handleClaimOrder = async (orderId: string) => {
@@ -212,8 +225,8 @@ export default function Admin() {
       <div className="space-y-[16px] flex-1">
         <div className="bg-bg2 border-[1.5px] border-border2 rounded-r2 p-[20px] space-y-[16px]">
           <div className="flex justify-between items-center mb-[8px]">
-            <h2 className="text-[14px] font-[700] text-text">{t('admin.cashManagement')}</h2>
-            <span className="text-[10px] bg-[rgba(0,208,132,0.1)] text-green px-[8px] py-[4px] rounded-[6px] uppercase tracking-[0.06em] font-[600]">{t('admin.eurOnly')}</span>
+            <h2 className="text-[14px] font-[700] text-text">{t('admin.cityManagement')}</h2>
+            <span className="text-[10px] bg-[rgba(79,142,247,0.12)] text-[#4F8EF7] px-[8px] py-[4px] rounded-[6px] uppercase tracking-[0.06em] font-[600]">Telegram</span>
           </div>
 
           <div className="space-y-[12px]">
@@ -284,7 +297,7 @@ export default function Admin() {
                     : citySaveState[city.id] === 'saved'
                       ? t('admin.citySaved')
                       : citySaveState[city.id] === 'error'
-                        ? t('admin.citySaveError')
+                        ? t('admin.citySaveError', { message: citySaveErrorMessage[city.id] || 'Unknown error' })
                         : t('admin.citySaveIdle')}
                 </div>
 
@@ -488,8 +501,8 @@ export default function Admin() {
                   className="w-full rounded-[10px] border border-border2 bg-bg2 px-[12px] py-[11px] text-[13px] text-text outline-none transition-colors focus:border-green"
                 >
                   <option value="all">{t('admin.allDirections')}</option>
-                  <option value="GIVE_CASH">{t('directions.giveCash')}</option>
-                  <option value="GIVE_USDT">{t('directions.giveUsdt')}</option>
+                  <option value="GIVE_CASH">{t('directions.eurToUsdt')}</option>
+                  <option value="GIVE_USDT">{t('directions.usdtToEur')}</option>
                 </select>
               </div>
             </div>

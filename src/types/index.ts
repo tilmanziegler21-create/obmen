@@ -20,6 +20,11 @@ export interface Rates {
 
 export type ExchangeDirection = 'GIVE_CASH' | 'GIVE_USDT';
 
+export interface SaveResult {
+  ok: boolean;
+  error?: string;
+}
+
 export interface ExchangeOrder {
   id: string;
   createdAt: string;
@@ -99,7 +104,7 @@ export interface ExchangeState {
   getAmount: string;
   
   // Admin Actions
-  saveCityConfig: (id: string, config: Partial<Pick<City, 'limitEUR' | 'groupChatId' | 'isActive'>>) => Promise<boolean>;
+  saveCityConfig: (id: string, config: Partial<Pick<City, 'limitEUR' | 'groupChatId' | 'isActive'>>) => Promise<SaveResult>;
   updateCityLimit: (id: string, limit: number) => Promise<void>;
   updateCityGroupChatId: (id: string, groupChatId: string) => Promise<void>;
   updateUsdtReserve: (amount: number) => Promise<void>;

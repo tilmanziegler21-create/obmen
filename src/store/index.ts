@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { ExchangeState, City, ExchangeOrder, type ExchangeAsset } from '../types';
+import { ExchangeState, City, ExchangeOrder, type ExchangeAsset, type SaveResult } from '../types';
 import { generateReferralCode, getCommissionMultiplier } from '../lib/customer';
 import { DEFAULT_RATES, convertBetweenAssets, getAssetConversionRate, roundAmountForAsset } from '../lib/rates';
 import { getAllowedTargetAssets, getDefaultTargetAsset, getDirectionFromGiveAsset, inferOrderAssets } from '../lib/exchangeAssets';
@@ -82,7 +82,7 @@ export const useStore = create<ExchangeState>()(
       saveCityConfig: async (id, config) => {
         const city = get().cities.find((item) => item.id === id);
         if (!city) {
-          return false;
+          return { ok: false, error: 'City not found' } satisfies SaveResult;
         }
 
         try {
@@ -95,17 +95,24 @@ export const useStore = create<ExchangeState>()(
               isActive: config.isActive ?? city.isActive,
             }),
           });
-          const data = await readJsonResponse<{ state: SharedServerState }>(response);
+          const data = await readJsonResponse<{ state?: SharedServerState; error?: string }>(response);
 
           if (response.ok && data?.state) {
             set({ ...data.state });
-            return true;
+            return { ok: true } satisfies SaveResult;
           }
+
+          return {
+            ok: false,
+            error: data?.error || `HTTP ${response.status}`,
+          } satisfies SaveResult;
         } catch (error) {
           console.error('Failed to save city config', error);
+          return {
+            ok: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          } satisfies SaveResult;
         }
-
-        return false;
       },
       
       updateCityLimit: async (id, limit) => {
