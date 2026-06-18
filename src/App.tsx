@@ -86,8 +86,7 @@ function AppShell() {
       >
         <Suspense fallback={<div className="flex-1 bg-bg2" />}>
           <Routes>
-            <Route path="/" element={<Exchange />} />
-            <Route path="/dashboard" element={<Home />} />
+            <Route path="/" element={<Home />} />
             <Route path="/exchange" element={<Exchange />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/orders" element={<Orders />} />
