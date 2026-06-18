@@ -385,12 +385,17 @@ function getOrderKeyboard(orderId) {
 }
 
 async function callTelegram(method, payload) {
-  const response = await fetch(`https://api.telegram.org/bot${botToken}/${method}`, {
+  const url = `https://api.telegram.org/bot${botToken}/${method}`;
+  console.log(`[Telegram API] Calling ${url} with payload:`, JSON.stringify(payload));
+
+  const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
+  
   const data = await response.json().catch(() => ({}));
+  console.log(`[Telegram API] Response from ${method}:`, JSON.stringify(data));
 
   if (!response.ok || data.ok === false) {
     const errorMessage = typeof data.description === 'string' ? data.description : 'Telegram API error';
@@ -436,13 +441,8 @@ function applyOrderReservesOnCreate(state, order) {
 
   if (order.direction === 'GIVE_CASH') {
     nextState.usdtReserve = Math.max(0, nextState.usdtReserve - Number(order.getAmount));
-  } else {
-    nextState.cities = nextState.cities.map((city) =>
-      city.id === order.cityId
-        ? { ...city, limitEUR: Math.max(0, city.limitEUR - Number(order.getAmount)) }
-        : city,
-    );
   }
+  // Remove cash limit check since we no longer track it
 
   nextState.orders = [order, ...nextState.orders];
   return nextState;
@@ -467,23 +467,8 @@ function applyOrderStatusChange(state, orderId, status, managerName) {
     } else if (shouldReserveAgain) {
       nextState.usdtReserve = Math.max(0, nextState.usdtReserve - Number(existingOrder.getAmount));
     }
-  } else {
-    nextState.cities = nextState.cities.map((city) => {
-      if (city.id !== existingOrder.cityId) {
-        return city;
-      }
-
-      if (shouldReleaseReserve) {
-        return { ...city, limitEUR: city.limitEUR + Number(existingOrder.getAmount) };
-      }
-
-      if (shouldReserveAgain) {
-        return { ...city, limitEUR: Math.max(0, city.limitEUR - Number(existingOrder.getAmount)) };
-      }
-
-      return city;
-    });
   }
+  // Remove cash limit restoring since we no longer track it
 
   nextState.orders = nextState.orders.map((order) =>
     order.id === orderId
@@ -754,34 +739,34 @@ app.post('/api/orders', async (req, res) => {
     return;
   }
 
-  try {
-    const telegramMessage = await sendTelegramMessage(
-      targetChatId,
-      formatTelegramOrderMessage(createdOrder, isVerified),
-      getOrderKeyboard(createdOrder.id),
-    );
+    try {
+      const telegramMessage = await sendTelegramMessage(
+        targetChatId,
+        formatTelegramOrderMessage(createdOrder, isVerified),
+        getOrderKeyboard(createdOrder.id),
+      );
 
-    createdOrder.telegramChatId = String(telegramMessage.chat?.id ?? targetChatId);
-    createdOrder.telegramMessageId = Number(telegramMessage.message_id) || null;
-    nextState = {
-      ...nextState,
-      orders: nextState.orders.map((order) => (order.id === createdOrder.id ? createdOrder : order)),
-    };
-    
-    writeState(nextState);
+      createdOrder.telegramChatId = String(telegramMessage.chat?.id ?? targetChatId);
+      createdOrder.telegramMessageId = Number(telegramMessage.message_id) || null;
+      nextState = {
+        ...nextState,
+        orders: nextState.orders.map((order) => (order.id === createdOrder.id ? createdOrder : order)),
+      };
+      
+      writeState(nextState);
 
-    res.json({
-      ok: true,
-      isVerified,
-      telegramDeliveryOk: true,
-      createdOrder,
-      state: getPublicState(nextState),
-    });
-  } catch (error) {
-    console.error('Failed to send Telegram notification', error);
-    // Rollback state by not writing nextState
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to send Telegram notification' });
-  }
+      res.json({
+        ok: true,
+        isVerified,
+        telegramDeliveryOk: true,
+        createdOrder,
+        state: getPublicState(nextState),
+      });
+    } catch (error) {
+      console.error('Failed to send Telegram notification', error);
+      // We don't save state if sending fails
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to send Telegram notification' });
+    }
 });
 
 app.post('/api/telegram/webhook', async (req, res) => {
