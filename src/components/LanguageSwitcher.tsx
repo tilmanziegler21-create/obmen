@@ -1,11 +1,11 @@
 import { useI18n, type Language } from '../i18n';
 
 const AVAILABLE_LANGUAGES: Language[] = ['ru', 'en', 'uk', 'de'];
-const LANGUAGE_FLAGS: Record<Language, string> = {
-  ru: '🇷🇺',
-  en: '🇬🇧',
-  uk: '🇺🇦',
-  de: '🇩🇪',
+const LANGUAGE_LABELS: Record<Language, string> = {
+  ru: 'RU',
+  en: 'EN',
+  uk: 'UA',
+  de: 'DE',
 };
 
 export default function LanguageSwitcher() {
@@ -19,13 +19,13 @@ export default function LanguageSwitcher() {
           type="button"
           onClick={() => setLanguage(code)}
           aria-label={code.toUpperCase()}
-          className={`min-w-[34px] rounded-[8px] px-[6px] py-[6px] text-[15px] leading-none transition-colors ${
+          className={`min-w-[34px] rounded-[8px] px-[6px] py-[6px] text-[12px] font-[700] leading-none transition-colors ${
             language === code
-              ? 'bg-green text-[#0A0B0F]'
+              ? 'bg-[#00CC66] text-[#000000]'
               : 'text-muted hover:text-text'
           }`}
         >
-          {LANGUAGE_FLAGS[code]}
+          {LANGUAGE_LABELS[code]}
         </button>
       ))}
     </div>

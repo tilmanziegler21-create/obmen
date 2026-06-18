@@ -340,7 +340,7 @@ export default function Checkout() {
           {isSubmitting ? (
             <span className="animate-pulse">{t('checkout.submitting')}</span>
           ) : (
-            `ПОЛУЧИТЬ ${getAssetLabel(selectedGetAsset, language).toUpperCase()}`
+            selectedGetAsset === 'USDT' ? t('checkout.submitCash') : t('checkout.submitUsdt')
           )}
         </button>
       </div>
