@@ -214,12 +214,9 @@ export default function Home() {
       >
         {/* ВЕРХНИЙ БЛОК: Приветствие и Авторизация */}
         <header className="mb-[24px] flex items-center justify-between">
-          <div className="flex items-center gap-[12px]">
-            <img src="/logo.jpeg" alt="Logo" className="h-[40px] w-[40px] rounded-full object-cover shadow-[0_0_15px_rgba(0,204,102,0.2)]" />
-            <div className="flex flex-col">
-              <span className="text-[14px] font-[500] text-[#9A9A9A]">{t('home.goodAfternoon')}</span>
-              <span className="text-[20px] font-[800] text-[#FFFFFF]">{t('home.brandName')}</span>
-            </div>
+          <div className="flex flex-col">
+            <span className="text-[14px] font-[500] text-[#9A9A9A]">{t('home.goodAfternoon')}</span>
+            <span className="text-[20px] font-[800] text-[#FFFFFF]">{t('home.brandName')}</span>
           </div>
           <div className="flex items-center gap-[12px]">
             <LanguageSwitcher />
@@ -232,18 +229,21 @@ export default function Home() {
           </div>
         </header>
 
-        <div className="space-y-[12px] flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col space-y-[12px]">
           {/* Главный блок коммерческих показателей */}
           <section className="relative overflow-hidden rounded-[20px] bg-gradient-to-br from-[#1A1A1A] to-[#0D0D0D] p-[20px]">
             <div className="absolute right-0 top-0 h-full w-[45%] opacity-80">
               <div className="absolute inset-0 bg-[url('https://coreva-normal.trae.ai/api/ide/v1/text_to_image?prompt=3d%20golden%20bull%20head%20statue%20dark%20background&image_size=square')] bg-cover bg-center bg-no-repeat mix-blend-screen" />
             </div>
             <div className="relative z-10 w-[65%]">
-              <div className="inline-flex items-center gap-[6px] rounded-full bg-[#111111]/80 px-[8px] py-[4px] backdrop-blur-sm">
-                <div className="h-[6px] w-[6px] rounded-full bg-[#00CC66]" />
-                <span className="text-[10px] font-[500] text-[#FFFFFF]">{t('home.onlineAverageTime')}</span>
+              <div className="flex items-center gap-[12px] mb-[16px]">
+                <img src="/logo.jpeg" alt="CryptoBull Logo" className="h-[36px] w-[36px] rounded-full object-cover shadow-[0_0_15px_rgba(0,204,102,0.2)]" />
+                <div className="inline-flex items-center gap-[6px] rounded-full bg-[#111111]/80 px-[8px] py-[4px] backdrop-blur-sm">
+                  <div className="h-[6px] w-[6px] rounded-full bg-[#00CC66]" />
+                  <span className="text-[10px] font-[500] text-[#FFFFFF]">{t('home.onlineAverageTime')}</span>
+                </div>
               </div>
-              <div className="mt-[16px] text-[12px] font-[500] uppercase tracking-wider text-[#9A9A9A]">
+              <div className="text-[12px] font-[500] uppercase tracking-wider text-[#9A9A9A]">
                 {t('home.bestRateToday')}
               </div>
               <div className="mt-[4px] text-[24px] font-[700] leading-tight text-[#FFFFFF]">
@@ -391,6 +391,11 @@ export default function Home() {
 
           {/* НИЖНИЙ БЛОК: Калькулятор обмена */}
           <div ref={calculatorRef} className="pt-[16px]">
+            <h3 className="mb-[16px] flex items-center text-[18px] font-[700] text-[#FFFFFF]">
+              <span className="mr-[8px] h-[16px] w-[4px] rounded-full bg-[#00CC66]" />
+              Конфигуратор обмена
+            </h3>
+
             <section className="premium-animated-calculator relative overflow-hidden rounded-[24px] border border-[#222222] p-[20px] shadow-lg">
               {/* Декоративный внутренний блик */}
               <div className="pointer-events-none absolute -right-24 -top-24 h-48 w-48 bg-[#00CC66] opacity-[0.03] blur-3xl" />
@@ -406,9 +411,9 @@ export default function Home() {
               </div>
 
               {/* Поле ввода (Отдаёте) */}
-              <div className="glass-input-field relative z-10 rounded-[16px] p-[16px] transition-all duration-300 focus-within:border-[#00CC66]/50">
-                <div className="mb-[4px] text-[12px] font-[500] text-[#9A9A9A]">{t('home.youGive')}</div>
-                <div className="flex items-center justify-between gap-[12px]">
+              <div className="relative z-10">
+                <label className="mb-[6px] block text-[12px] font-[500] text-[#9A9A9A]">{t('home.youGive')}</label>
+                <div className="glass-input-field flex items-center justify-between gap-[12px] rounded-[16px] p-[12px] transition-all duration-300 focus-within:border-[#00CC66]/50">
                   <input
                     ref={amountInputRef}
                     type="number"
@@ -424,12 +429,12 @@ export default function Home() {
                     min="0"
                     step={selectedGiveAsset === 'EUR_CASH' ? '10' : '0.01'}
                     inputMode="decimal"
-                    className="min-w-0 flex-1 bg-transparent text-[32px] font-[700] text-[#FFFFFF] outline-none placeholder:text-[#333333]"
+                    className="min-w-0 flex-1 bg-transparent text-[24px] font-[700] text-[#FFFFFF] outline-none placeholder:text-[#333333]"
                   />
                   <button
                     type="button"
                     onClick={() => setActiveAssetSheet('give')}
-                    className="flex shrink-0 items-center gap-[6px] rounded-[12px] bg-[#222222] px-[12px] py-[8px]"
+                    className="flex shrink-0 items-center gap-[6px] rounded-[12px] border border-white/5 bg-black/60 px-[12px] py-[8px]"
                   >
                     <span className="text-[16px]">{selectedGiveAsset === 'EUR_CASH' ? '🇪🇺' : selectedGiveAsset === 'UAH_CARD' ? '🇺🇦' : '₮'}</span>
                     <span className="text-[14px] font-[600] text-[#FFFFFF]">{getAssetCurrency(selectedGiveAsset)}</span>
@@ -438,31 +443,34 @@ export default function Home() {
               </div>
 
               {/* Указатель направления */}
-              <div className="relative z-20 -my-[12px] flex justify-center">
+              <div className="relative z-20 -my-[16px] flex justify-center">
                 <button 
                   onClick={handleSwapDirection}
-                  className="flex h-[36px] w-[36px] items-center justify-center rounded-full border-4 border-[#111111] bg-[#222222] text-[#00CC66] transition-transform duration-300 hover:scale-110 active:scale-95 shadow-lg shadow-[#00CC66]/30"
+                  className="flex h-[36px] w-[36px] items-center justify-center rounded-full bg-[#00CC66] text-[#000000] shadow-lg shadow-[#00CC66]/30 transition-transform duration-300 hover:scale-110 active:scale-95"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 5v14M19 12l-7 7-7-7" />
+                    <path d="m21 16-4 4-4-4" />
+                    <path d="M17 20V4" />
+                    <path d="m3 8 4-4 4 4" />
+                    <path d="M7 4v16" />
                   </svg>
                 </button>
               </div>
 
               {/* Поле вывода (Получаете) */}
-              <div className="glass-input-field relative z-10 rounded-[16px] p-[16px]">
-                <div className="mb-[4px] text-[12px] font-[500] text-[#9A9A9A]">{t('home.youGet')}</div>
-                <div className="flex items-center justify-between gap-[12px]">
-                  <div className={`truncate min-w-0 flex-1 text-[32px] font-[700] ${getAmount ? 'text-[#FFFFFF]' : 'text-[#333333]'}`}>
+              <div className="relative z-10 mt-[16px]">
+                <label className="mb-[6px] block text-[12px] font-[500] text-[#9A9A9A]">{t('home.youGet')}</label>
+                <div className="glass-input-field flex items-center justify-between gap-[12px] rounded-[16px] p-[12px]">
+                  <div className={`min-w-0 flex-1 truncate text-[24px] font-[700] ${getAmount ? 'text-[#FFFFFF] opacity-90' : 'text-[#333333]'}`}>
                     {getAmount || '0'}
                   </div>
                   <button
                     type="button"
                     onClick={() => setActiveAssetSheet('get')}
-                    className="flex shrink-0 items-center gap-[6px] rounded-[12px] bg-[#222222] px-[12px] py-[8px]"
+                    className="flex shrink-0 items-center gap-[6px] rounded-[12px] border border-white/5 bg-black/60 px-[12px] py-[8px]"
                   >
                     <span className="text-[16px]">{selectedGetAsset === 'EUR_CASH' ? '🇪🇺' : selectedGetAsset === 'UAH_CARD' ? '🇺🇦' : '₮'}</span>
-                    <span className="text-[14px] font-[600] text-[#FFFFFF]">{getAssetCurrency(selectedGetAsset)}</span>
+                    <span className="text-[14px] font-[600] text-[#00CC66]">{getAssetCurrency(selectedGetAsset)}</span>
                   </button>
                 </div>
               </div>
@@ -483,8 +491,8 @@ export default function Home() {
             </section>
 
             {/* Выбор города */}
-            <section className="mt-[12px] rounded-[16px] border border-[#222222] bg-[#111111] p-[20px]">
-              <div className="text-[11px] font-[400] uppercase tracking-[0.12em] text-[#9A9A9A]">{t('home.cityTitle')}</div>
+            <section className="mt-[16px] rounded-[24px] border border-[#222222] bg-[#111111] p-[20px]">
+              <div className="mb-[16px] text-[12px] font-[600] uppercase tracking-wider text-[#9A9A9A]">{t('home.cityTitle')}</div>
               {currentCity && !isCityPickerOpen ? (
                 <div className="mt-[12px] space-y-[12px]">
                   <div className="flex w-full items-center gap-[12px] rounded-[12px] bg-[#1A1A1A] px-[12px] py-[14px] text-left">
