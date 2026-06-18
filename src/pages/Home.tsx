@@ -243,7 +243,7 @@ export default function Home() {
                 1 EUR = <br />{rates.EUR_USDT.toFixed(4)} USDT
               </div>
               <div className="mt-[8px] text-[11px] font-[400] text-[#808080]">
-                Обновлено {formattedRateUpdatedAt}
+                {t('home.rateUpdated', { time: formattedRateUpdatedAt })}
               </div>
             </div>
           </section>
@@ -336,7 +336,7 @@ export default function Home() {
                   {t('home.workingInGermany')}
                 </h3>
                 <div className="text-[13px] font-[600] leading-snug text-[#FFFFFF]">
-                  Франкфурт, Берлин,<br />Мюнхен, Гамбург
+                  {t('home.germanyCitiesList')}
                 </div>
               </div>
               <div className="mt-[12px] text-[11px] font-[500] text-[#808080]">
@@ -554,7 +554,7 @@ export default function Home() {
               disabled={!isValid}
               className={`mt-[16px] w-full rounded-[16px] px-[24px] py-[18px] text-[15px] font-[700] uppercase tracking-[0.08em] transition-opacity ${isValid ? 'bg-[#00CC66] text-[#000000] hover:opacity-90 shadow-[0_4px_14px_rgba(0,204,102,0.25)]' : 'bg-[#1A1A1A] text-[#808080]'}`}
             >
-              {t('home.ctaCash')}
+              {selectedGiveAsset === 'EUR_CASH' ? t('home.ctaCash') : t('home.ctaUsdt')}
             </button>
           </div>
         </div>
