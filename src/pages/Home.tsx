@@ -216,10 +216,7 @@ export default function Home() {
         <header className="mb-[24px] flex items-center justify-between">
           <div className="flex flex-col">
             <span className="text-[14px] font-[500] text-[#9A9A9A]">{t('home.goodAfternoon')}</span>
-            <div className="flex items-center gap-[8px]">
-              <span className="text-[20px] font-[800] text-[#FFFFFF]">{t('home.brandName')}</span>
-              <img src="/logo.jpeg" alt="CryptoBull Logo" className="h-[24px] w-[24px] rounded-full object-cover shadow-[0_0_10px_rgba(0,204,102,0.2)]" />
-            </div>
+            <span className="text-[20px] font-[800] text-[#FFFFFF]">{t('home.brandName')}</span>
           </div>
           <div className="flex items-center gap-[12px]">
             <LanguageSwitcher />
