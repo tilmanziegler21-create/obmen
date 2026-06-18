@@ -123,6 +123,12 @@ export default function Checkout() {
       }
 
       if (responseData?.state) {
+        useStore.setState((state) => ({
+          ...state,
+          ...responseData.state,
+          isLoading: false,
+        }));
+      } else {
         await fetchInitialData();
       }
 

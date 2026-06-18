@@ -14,8 +14,6 @@ export default function Home() {
     rates,
     rateUpdatedAt,
     orders,
-    usdtReserve,
-    cities,
     profileSettings,
     updateProfileSettings,
   } = useStore();
@@ -55,10 +53,6 @@ export default function Home() {
   const latestActiveOrder = useMemo(
     () => currentUserOrders.find((order) => order.status === 'accepted' || order.status === 'processing' || order.status === 'ready') ?? null,
     [currentUserOrders],
-  );
-  const totalCashReserve = useMemo(
-    () => cities.filter((city) => city.isActive).reduce((sum, city) => sum + city.limitEUR, 0),
-    [cities],
   );
   const activeOrderStatusDotClass = latestActiveOrder?.status === 'ready'
     ? 'bg-[#D4AF37]'
@@ -195,16 +189,6 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="mt-[20px] grid grid-cols-2 gap-[12px] border-t border-[#222222] pt-[20px]">
-            <div>
-              <div className="text-[12px] font-[400] text-[#9A9A9A]">{t('home.reserveUsdt')}</div>
-              <div className="mt-[6px] text-[20px] font-[600] text-[#FFFFFF]">{usdtReserve.toFixed(0)}</div>
-            </div>
-            <div>
-              <div className="text-[12px] font-[400] text-[#9A9A9A]">{t('home.reserveCash')}</div>
-              <div className="mt-[6px] text-[20px] font-[600] text-[#FFFFFF]">{totalCashReserve.toFixed(0)}€</div>
-            </div>
-          </div>
         </section>
 
         <section className="rounded-[16px] border border-[#222222] bg-[#111111] px-[24px] py-[24px]">
