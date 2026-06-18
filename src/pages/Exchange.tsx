@@ -97,7 +97,7 @@ export default function Exchange() {
         </div>
         <button 
           onClick={handleOpenProfile}
-          className="flex h-[40px] w-[40px] items-center justify-center rounded-full bg-gradient-to-br from-[#D4AF37] to-[#B38F26] text-[18px] font-[700] text-[#000000] shadow-[0_0_15px_rgba(212,175,55,0.3)]"
+          className="flex h-[40px] w-[40px] items-center justify-center rounded-full bg-gradient-to-br from-[#00CC66] to-[#00994C] text-[18px] font-[700] text-[#000000] shadow-[0_0_15px_rgba(0,204,102,0.3)]"
         >
           {user?.first_name ? user.first_name.charAt(0).toUpperCase() : 'K'}
         </button>
@@ -143,7 +143,7 @@ export default function Exchange() {
           <div className="relative z-10 -my-[12px] flex justify-center">
             <button 
               onClick={handleSwapDirection}
-              className="flex h-[36px] w-[36px] items-center justify-center rounded-full border-4 border-[#111111] bg-gradient-to-b from-[#D4AF37] to-[#B38F26] text-[#000000] shadow-md transition-transform hover:scale-105 active:scale-95"
+              className="flex h-[36px] w-[36px] items-center justify-center rounded-full border-4 border-[#111111] bg-gradient-to-b from-[#00CC66] to-[#00994C] text-[#000000] shadow-md transition-transform hover:scale-105 active:scale-95"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 5v14M19 12l-7 7-7-7" />
@@ -169,7 +169,7 @@ export default function Exchange() {
           {latestActiveOrder && (
             <div className="mt-[16px] flex items-center justify-between rounded-[12px] bg-[#1A1A1A]/50 px-[16px] py-[12px] border border-[#222222]">
               <div className="flex items-center gap-[8px]">
-                <div className="h-[8px] w-[8px] rounded-full bg-[#D4AF37]" />
+                <div className="h-[8px] w-[8px] rounded-full bg-[#00CC66]" />
                 <span className="text-[13px] font-[500] text-[#FFFFFF]">
                   {t('home.orderProcessing', { id: latestActiveOrder.id })}
                 </span>
@@ -188,7 +188,7 @@ export default function Exchange() {
           type="button"
           onClick={handleOpenExchange}
           disabled={!giveAmount || Number(giveAmount) <= 0}
-          className="w-full rounded-[16px] bg-gradient-to-r from-[#D4AF37] to-[#B38F26] px-[24px] py-[18px] text-[16px] font-[700] uppercase tracking-wider text-[#000000] shadow-[0_4px_14px_rgba(212,175,55,0.25)] transition-opacity disabled:opacity-50 disabled:shadow-none"
+          className="w-full rounded-[16px] bg-gradient-to-r from-[#00CC66] to-[#00994C] px-[24px] py-[18px] text-[16px] font-[700] uppercase tracking-wider text-[#000000] shadow-[0_4px_14px_rgba(0,204,102,0.25)] transition-opacity disabled:opacity-50 disabled:shadow-none"
         >
           {t('home.quickExchange')}
         </button>
@@ -220,10 +220,10 @@ export default function Exchange() {
             onClick={handleCopyReferralCode}
             className="flex items-center gap-[8px] rounded-[8px] bg-[#1A1A1A] px-[12px] py-[8px] transition-colors hover:bg-[#222222]"
           >
-            <span className="font-mono text-[14px] font-[700] tracking-wider text-[#D4AF37]">
+            <span className="font-mono text-[14px] font-[700] tracking-wider text-[#00CC66]">
               {profileSettings.referralCode}
             </span>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={isReferralCopied ? "#00D084" : "#D4AF37"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={isReferralCopied ? "#00D084" : "#00CC66"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               {isReferralCopied ? (
                 <path d="M20 6L9 17l-5-5" />
               ) : (

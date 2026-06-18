@@ -20,8 +20,8 @@ export default {
         green3: 'rgba(0,208,132,0.22)',
         usdt: '#26A17B',
         usdt2: 'rgba(38,161,123,0.12)',
-        amber: '#F5A623',
-        amber2: 'rgba(245,166,35,0.12)',
+        amber: '#00CC66',
+        amber2: 'rgba(0,204,102,0.12)',
         blue: '#4F8EF7',
         blue2: 'rgba(79,142,247,0.12)',
         error: '#F87171'
