@@ -39,9 +39,6 @@ export default function Admin() {
   const [editLimits, setEditLimits] = useState<Record<string, string>>(
     cities.reduce((acc, city) => ({ ...acc, [city.id]: city.limitEUR.toString() }), {})
   );
-  const [editGroupChatIds, setEditGroupChatIds] = useState<Record<string, string>>(
-    cities.reduce((acc, city) => ({ ...acc, [city.id]: city.groupChatId ?? '' }), {}),
-  );
   const [editRate, setEditRate] = useState(rates.EUR_USDT.toString());
   const [editUsdtReserve, setEditUsdtReserve] = useState(usdtReserve.toString());
   const [editAntiPhishingCode, setEditAntiPhishingCode] = useState(antiPhishingCode);
@@ -58,7 +55,6 @@ export default function Admin() {
 
   useEffect(() => {
     setEditLimits(cities.reduce((acc, city) => ({ ...acc, [city.id]: city.limitEUR.toString() }), {}));
-    setEditGroupChatIds(cities.reduce((acc, city) => ({ ...acc, [city.id]: city.groupChatId ?? '' }), {}));
   }, [cities]);
 
   useEffect(() => {
@@ -154,21 +150,6 @@ export default function Admin() {
     setCitySaveErrorMessage((prev) => ({ ...prev, [id]: '' }));
     const result = await saveCityConfig(id, {
       limitEUR: newLimit,
-      groupChatId: editGroupChatIds[id] ?? '',
-    });
-    setCitySaveState((prev) => ({ ...prev, [id]: result.ok ? 'saved' : 'error' }));
-    if (!result.ok) {
-      setCitySaveErrorMessage((prev) => ({ ...prev, [id]: result.error ?? '' }));
-    }
-  };
-
-  const handleSaveGroupChatId = async (id: string) => {
-    WebApp.HapticFeedback.impactOccurred('medium');
-    setCitySaveState((prev) => ({ ...prev, [id]: 'saving' }));
-    setCitySaveErrorMessage((prev) => ({ ...prev, [id]: '' }));
-    const result = await saveCityConfig(id, {
-      limitEUR: Number(editLimits[id]) || 0,
-      groupChatId: editGroupChatIds[id] ?? '',
     });
     setCitySaveState((prev) => ({ ...prev, [id]: result.ok ? 'saved' : 'error' }));
     if (!result.ok) {
@@ -186,7 +167,6 @@ export default function Admin() {
     setCitySaveErrorMessage((prev) => ({ ...prev, [id]: '' }));
     const result = await saveCityConfig(id, {
       limitEUR: Number(editLimits[id]) || city.limitEUR,
-      groupChatId: editGroupChatIds[id] ?? city.groupChatId,
       isActive: !city.isActive,
     });
     setCitySaveState((prev) => ({ ...prev, [id]: result.ok ? 'saved' : 'error' }));
@@ -226,7 +206,6 @@ export default function Admin() {
         <div className="bg-bg2 border-[1.5px] border-border2 rounded-r2 p-[20px] space-y-[16px]">
           <div className="flex justify-between items-center mb-[8px]">
             <h2 className="text-[14px] font-[700] text-text">{t('admin.cityManagement')}</h2>
-            <span className="text-[10px] bg-[rgba(79,142,247,0.12)] text-[#4F8EF7] px-[8px] py-[4px] rounded-[6px] uppercase tracking-[0.06em] font-[600]">Telegram</span>
           </div>
 
           <div className="space-y-[12px]">
@@ -262,28 +241,6 @@ export default function Admin() {
                   >
                     {t('admin.save')}
                   </button>
-                </div>
-
-                <div className="mt-[10px] flex flex-col gap-[8px] min-[360px]:flex-row min-[360px]:items-center">
-                  <input
-                    type="text"
-                    value={editGroupChatIds[city.id] ?? ''}
-                    onChange={(e) =>
-                      setEditGroupChatIds((prev) => ({ ...prev, [city.id]: e.target.value }))
-                    }
-                    placeholder={t('admin.cityGroupPlaceholder')}
-                    className="w-full flex-1 bg-bg2 border border-border2 rounded-[8px] py-[10px] px-[12px] text-[13px] font-mono text-text outline-none focus:border-[#4F8EF7] transition-colors placeholder:text-dim"
-                  />
-                  <button
-                    onClick={() => handleSaveGroupChatId(city.id)}
-                    className="bg-bg2 border border-border2 hover:border-[#4F8EF7] hover:text-[#4F8EF7] text-muted px-[16px] py-[10px] rounded-[8px] text-[12px] font-[600] transition-colors"
-                  >
-                    {t('admin.save')}
-                  </button>
-                </div>
-
-                <div className="mt-[8px] text-[11px] font-[500] text-dim">
-                  {t('admin.cityGroupHint')}
                 </div>
                 <div className={`mt-[6px] text-[11px] font-[600] ${
                   citySaveState[city.id] === 'saved'

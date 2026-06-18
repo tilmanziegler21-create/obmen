@@ -104,9 +104,8 @@ export interface ExchangeState {
   getAmount: string;
   
   // Admin Actions
-  saveCityConfig: (id: string, config: Partial<Pick<City, 'limitEUR' | 'groupChatId' | 'isActive'>>) => Promise<SaveResult>;
+  saveCityConfig: (id: string, config: Partial<Pick<City, 'limitEUR' | 'isActive'>>) => Promise<SaveResult>;
   updateCityLimit: (id: string, limit: number) => Promise<void>;
-  updateCityGroupChatId: (id: string, groupChatId: string) => Promise<void>;
   updateUsdtReserve: (amount: number) => Promise<void>;
   updateRate: (rate: number) => Promise<void>;
   updateAntiPhishingCode: (code: string) => Promise<void>;

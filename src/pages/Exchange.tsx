@@ -155,7 +155,7 @@ export default function Exchange() {
       ? `Комиссия ${benefits.effectiveCommissionPercent.toFixed(1)}% · Перевод USDT на ваш кошелек`
       : selectedGetAsset === 'UAH_CARD'
         ? `Комиссия ${benefits.effectiveCommissionPercent.toFixed(1)}% · Перевод на карту UAH`
-        : `Комиссия ${benefits.effectiveCommissionPercent.toFixed(1)}% · Через 30 минут выдача наличных EUR`;
+        : `Комиссия ${benefits.effectiveCommissionPercent.toFixed(1)}% · Получение наличных EUR по заявке`;
 
   const handleNext = () => {
     if (!isValid) {

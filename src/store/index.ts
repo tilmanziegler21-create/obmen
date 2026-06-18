@@ -91,7 +91,6 @@ export const useStore = create<ExchangeState>()(
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               limitEUR: config.limitEUR ?? city.limitEUR,
-              groupChatId: config.groupChatId ?? city.groupChatId,
               isActive: config.isActive ?? city.isActive,
             }),
           });
@@ -117,10 +116,6 @@ export const useStore = create<ExchangeState>()(
       
       updateCityLimit: async (id, limit) => {
         await get().saveCityConfig(id, { limitEUR: limit });
-      },
-
-      updateCityGroupChatId: async (id, groupChatId) => {
-        await get().saveCityConfig(id, { groupChatId });
       },
 
       updateUsdtReserve: async (amount) => {

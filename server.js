@@ -24,6 +24,26 @@ const adminIds = new Set(
     .filter(Boolean),
 );
 
+// #region debug-point A:reporter
+function reportDebugEvent(runId, hypothesisId, location, msg, data = {}) {
+  try {
+    const envPath = path.join(__dirname, '.dbg', 'save-state-failure.env');
+    let debugUrl = 'http://127.0.0.1:7777/event';
+    let sessionId = 'save-state-failure';
+    if (fs.existsSync(envPath)) {
+      const envRaw = fs.readFileSync(envPath, 'utf8');
+      debugUrl = envRaw.match(/DEBUG_SERVER_URL=(.+)/)?.[1]?.trim() || debugUrl;
+      sessionId = envRaw.match(/DEBUG_SESSION_ID=(.+)/)?.[1]?.trim() || sessionId;
+    }
+    fetch(debugUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, runId, hypothesisId, location, msg, data, ts: Date.now() }),
+    }).catch(() => {});
+  } catch {}
+}
+// #endregion
+
 app.use(express.json({ limit: '256kb' }));
 
 function buildTelegramSecret(botTokenValue) {
@@ -81,19 +101,19 @@ function ensureString(value) {
 
 function getDefaultCities() {
   return [
-    { id: '1', cityKey: 'berlin', isActive: true, limitEUR: 500, groupChatId: '' },
-    { id: '2', cityKey: 'munich', isActive: true, limitEUR: 500, groupChatId: '' },
-    { id: '3', cityKey: 'hamburg', isActive: true, limitEUR: 500, groupChatId: '' },
-    { id: '4', cityKey: 'frankfurt', isActive: true, limitEUR: 500, groupChatId: '' },
-    { id: '5', cityKey: 'cologne', isActive: true, limitEUR: 500, groupChatId: '' },
-    { id: '6', cityKey: 'dusseldorf', isActive: true, limitEUR: 500, groupChatId: '' },
-    { id: '7', cityKey: 'stuttgart', isActive: true, limitEUR: 500, groupChatId: '' },
-    { id: '8', cityKey: 'leipzig', isActive: true, limitEUR: 500, groupChatId: '' },
-    { id: '9', cityKey: 'dortmund', isActive: true, limitEUR: 500, groupChatId: '' },
-    { id: '10', cityKey: 'essen', isActive: true, limitEUR: 500, groupChatId: '' },
-    { id: '11', cityKey: 'bremen', isActive: true, limitEUR: 500, groupChatId: '' },
-    { id: '12', cityKey: 'hannover', isActive: true, limitEUR: 500, groupChatId: '' },
-    { id: '13', cityKey: 'nuremberg', isActive: true, limitEUR: 500, groupChatId: '' },
+    { id: '1', cityKey: 'berlin', isActive: true, limitEUR: 500 },
+    { id: '2', cityKey: 'munich', isActive: true, limitEUR: 500 },
+    { id: '3', cityKey: 'hamburg', isActive: true, limitEUR: 500 },
+    { id: '4', cityKey: 'frankfurt', isActive: true, limitEUR: 500 },
+    { id: '5', cityKey: 'cologne', isActive: true, limitEUR: 500 },
+    { id: '6', cityKey: 'dusseldorf', isActive: true, limitEUR: 500 },
+    { id: '7', cityKey: 'stuttgart', isActive: true, limitEUR: 500 },
+    { id: '8', cityKey: 'leipzig', isActive: true, limitEUR: 500 },
+    { id: '9', cityKey: 'dortmund', isActive: true, limitEUR: 500 },
+    { id: '10', cityKey: 'essen', isActive: true, limitEUR: 500 },
+    { id: '11', cityKey: 'bremen', isActive: true, limitEUR: 500 },
+    { id: '12', cityKey: 'hannover', isActive: true, limitEUR: 500 },
+    { id: '13', cityKey: 'nuremberg', isActive: true, limitEUR: 500 },
   ];
 }
 
@@ -123,7 +143,6 @@ function normalizeState(rawState) {
           cityKey: ensureString(city?.cityKey) || defaults.cities[index]?.cityKey || 'berlin',
           isActive: city?.isActive !== false,
           limitEUR: Number(city?.limitEUR) || 0,
-          groupChatId: ensureString(city?.groupChatId),
         }))
       : defaults.cities,
     rates: {
@@ -182,7 +201,20 @@ function readState() {
 
 function writeState(state) {
   ensureDataDir();
+  // #region debug-point A:write-state-before
+  reportDebugEvent('pre-fix', 'A', 'server.js:writeState:before', '[DEBUG] writeState start', {
+    cities: Array.isArray(state?.cities) ? state.cities.length : null,
+    orders: Array.isArray(state?.orders) ? state.orders.length : null,
+    statePath,
+  });
+  // #endregion
   fs.writeFileSync(statePath, JSON.stringify(normalizeState(state), null, 2), 'utf8');
+  // #region debug-point A:write-state-after
+  reportDebugEvent('pre-fix', 'A', 'server.js:writeState:after', '[DEBUG] writeState success', {
+    statePath,
+    exists: fs.existsSync(statePath),
+  });
+  // #endregion
 }
 
 function getErrorMessage(error) {
@@ -503,6 +535,13 @@ app.put('/api/admin/cities/:id', (req, res) => {
   try {
     const state = readState();
     const city = state.cities.find((item) => item.id === req.params.id);
+    // #region debug-point B:city-save-request
+    reportDebugEvent('pre-fix', 'B', 'server.js:/api/admin/cities', '[DEBUG] city save request', {
+      cityId: req.params.id,
+      body: req.body,
+      cityFound: Boolean(city),
+    });
+    // #endregion
 
     if (!city) {
       res.status(404).json({ error: 'City not found' });
@@ -510,13 +549,25 @@ app.put('/api/admin/cities/:id', (req, res) => {
     }
 
     city.limitEUR = Math.max(0, Number(req.body?.limitEUR) || 0);
-    city.groupChatId = ensureString(req.body?.groupChatId);
     city.isActive = req.body?.isActive !== false;
 
     writeState(state);
+    // #region debug-point B:city-save-response
+    reportDebugEvent('pre-fix', 'B', 'server.js:/api/admin/cities', '[DEBUG] city save success response', {
+      cityId: city.id,
+      limitEUR: city.limitEUR,
+      isActive: city.isActive,
+    });
+    // #endregion
     res.json({ ok: true, state: getPublicState(state) });
   } catch (error) {
     console.error('Failed to save city settings', error);
+    // #region debug-point B:city-save-error
+    reportDebugEvent('pre-fix', 'B', 'server.js:/api/admin/cities', '[DEBUG] city save error', {
+      cityId: req.params.id,
+      error: getErrorMessage(error),
+    });
+    // #endregion
     res.status(500).json({ error: getErrorMessage(error) });
   }
 });
@@ -574,6 +625,15 @@ app.patch('/api/admin/orders/:id', async (req, res) => {
 app.post('/api/orders', async (req, res) => {
   const orderDraft = normalizeOrderPayload(req.body?.order);
   const telegramInitData = ensureString(req.body?.telegramInitData);
+  // #region debug-point C:order-request
+  reportDebugEvent('pre-fix', 'C', 'server.js:/api/orders', '[DEBUG] order request received', {
+    hasOrderDraft: Boolean(orderDraft),
+    cityId: req.body?.order?.cityId ?? null,
+    cityKey: req.body?.order?.cityKey ?? null,
+    giveAsset: req.body?.order?.giveAsset ?? null,
+    getAsset: req.body?.order?.getAsset ?? null,
+  });
+  // #endregion
 
   if (!orderDraft) {
     res.status(400).json({ error: 'Invalid order payload' });
@@ -607,7 +667,7 @@ app.post('/api/orders', async (req, res) => {
     return;
   }
 
-  const targetChatId = city.groupChatId || fallbackChatId;
+  const targetChatId = fallbackChatId;
 
   const createdOrder = {
     ...orderDraft,
@@ -626,11 +686,18 @@ app.post('/api/orders', async (req, res) => {
   let warning = null;
 
   writeState(nextState);
+  // #region debug-point C:order-written
+  reportDebugEvent('pre-fix', 'C', 'server.js:/api/orders', '[DEBUG] order written to state', {
+    createdOrderId: createdOrder.id,
+    ordersAfterWrite: nextState.orders.length,
+    topOrderId: nextState.orders[0]?.id ?? null,
+  });
+  // #endregion
 
   if (!botToken) {
     warning = 'Order saved, but BOT_TOKEN is missing';
   } else if (!targetChatId) {
-    warning = 'Order saved, but city group chat id is missing';
+    warning = 'Order saved, but CHAT_ID is missing';
   } else {
     try {
       const telegramMessage = await sendTelegramMessage(
@@ -661,6 +728,14 @@ app.post('/api/orders', async (req, res) => {
     createdOrder,
     state: getPublicState(nextState),
   });
+  // #region debug-point D:order-response
+  reportDebugEvent('pre-fix', 'D', 'server.js:/api/orders', '[DEBUG] order response sent', {
+    createdOrderId: createdOrder.id,
+    telegramDeliveryOk,
+    warning,
+    returnedOrders: nextState.orders.length,
+  });
+  // #endregion
 });
 
 app.post('/api/telegram/webhook', async (req, res) => {
