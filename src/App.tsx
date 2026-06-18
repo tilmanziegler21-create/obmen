@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import WebApp from '@twa-dev/sdk';
 import { useStore } from './store';
@@ -16,7 +16,8 @@ function AppShell() {
   const fetchInitialData = useStore(state => state.fetchInitialData);
   const { t } = useI18n();
   const location = useLocation();
-  const showBottomNav = location.pathname !== '/checkout' && location.pathname !== '/admin';
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const showBottomNav = location.pathname !== '/checkout' && location.pathname !== '/admin' && !isKeyboardVisible;
 
   useEffect(() => {
     // Initialize Telegram Web App
@@ -29,6 +30,53 @@ function AppShell() {
     
     fetchInitialData();
   }, [fetchInitialData, t]);
+
+  useEffect(() => {
+    const isEditableTarget = (target: EventTarget | null) =>
+      target instanceof HTMLElement &&
+      (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
+
+    const handleFocusIn = (event: FocusEvent) => {
+      if (isEditableTarget(event.target)) {
+        setIsKeyboardVisible(true);
+      }
+    };
+
+    const handleFocusOut = () => {
+      window.setTimeout(() => {
+        const activeElement = document.activeElement;
+        if (!isEditableTarget(activeElement)) {
+          setIsKeyboardVisible(false);
+        }
+      }, 100);
+    };
+
+    const viewport = window.visualViewport;
+    const initialHeight = viewport?.height ?? window.innerHeight;
+
+    const handleViewportResize = () => {
+      const currentHeight = viewport?.height ?? window.innerHeight;
+      const hasEditableFocus = isEditableTarget(document.activeElement);
+      if (hasEditableFocus && currentHeight < initialHeight - 120) {
+        setIsKeyboardVisible(true);
+        return;
+      }
+
+      if (!hasEditableFocus) {
+        setIsKeyboardVisible(false);
+      }
+    };
+
+    window.addEventListener('focusin', handleFocusIn);
+    window.addEventListener('focusout', handleFocusOut);
+    viewport?.addEventListener('resize', handleViewportResize);
+
+    return () => {
+      window.removeEventListener('focusin', handleFocusIn);
+      window.removeEventListener('focusout', handleFocusOut);
+      viewport?.removeEventListener('resize', handleViewportResize);
+    };
+  }, []);
 
   return (
     <div className="min-h-screen w-full max-w-[420px] mx-auto relative flex flex-col bg-[#000000] text-[#FFFFFF]">

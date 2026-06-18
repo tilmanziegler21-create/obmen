@@ -65,6 +65,7 @@ export default function Exchange() {
   const [citySearch, setCitySearch] = useState('');
   const [activeAssetSheet, setActiveAssetSheet] = useState<'give' | 'get' | null>(null);
   const [isAmountConfirmed, setIsAmountConfirmed] = useState(false);
+  const [isCityPickerOpen, setIsCityPickerOpen] = useState(!selectedCityId);
   const amountInputRef = useRef<HTMLInputElement>(null);
 
   const metrics = useMemo(
@@ -79,6 +80,12 @@ export default function Exchange() {
   useEffect(() => {
     setCommissionPercent(benefits.effectiveCommissionPercent);
   }, [benefits.effectiveCommissionPercent, setCommissionPercent]);
+
+  useEffect(() => {
+    if (!selectedCityId) {
+      setIsCityPickerOpen(true);
+    }
+  }, [selectedCityId]);
 
   const filteredCities = useMemo(() => {
     const query = citySearch.trim().toLowerCase();
@@ -322,44 +329,71 @@ export default function Exchange() {
 
           <section className="rounded-[16px] border border-[#222222] bg-[#111111] p-[24px]">
             <div className="text-[11px] font-[400] uppercase tracking-[0.12em] text-[#9A9A9A]">{t('home.cityTitle')}</div>
-            <div className="sticky top-0 mt-[12px] bg-[#111111] pb-[12px]">
-              <input
-                type="text"
-                value={citySearch}
-                onChange={(e) => setCitySearch(e.target.value)}
-                placeholder={t('home.searchPlaceholder')}
-                className="w-full rounded-[12px] border border-[#222222] bg-[#1A1A1A] px-[16px] py-[14px] text-[14px] text-[#FFFFFF] outline-none placeholder:text-[#9A9A9A]"
-              />
-            </div>
-
-            <div className="space-y-[4px]">
-              {filteredCities.map((city) => (
-                <button
-                  key={city.id}
-                  type="button"
-                  onClick={() => {
-                    WebApp.HapticFeedback.selectionChanged();
-                    setCity(city.id);
-                  }}
-                  className="flex w-full items-center gap-[12px] rounded-[12px] border border-transparent px-[12px] py-[14px] text-left transition-colors hover:bg-[#151515]"
-                >
+            {currentCity && !isCityPickerOpen ? (
+              <div className="mt-[12px] space-y-[12px]">
+                <div className="flex w-full items-center gap-[12px] rounded-[12px] bg-[#1A1A1A] px-[12px] py-[14px] text-left">
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-[14px] font-[600] text-[#FFFFFF]">{t(`cities.${city.cityKey}`)}</div>
-                    {!city.isActive && (
+                    <div className="truncate text-[14px] font-[600] text-[#FFFFFF]">{t(`cities.${currentCity.cityKey}`)}</div>
+                    {!currentCity.isActive && (
                       <div className="mt-[4px] text-[12px] font-[400] text-[#9A9A9A]">{t('home.cityInactive')}</div>
                     )}
                   </div>
-                  <div className={`shrink-0 text-[12px] font-[400] ${selectedCityId === city.id ? 'text-[#D4AF37]' : 'text-[#808080]'}`}>
-                    {selectedCityId === city.id ? t('home.citySelected') : ''}
-                  </div>
-                </button>
-              ))}
-            </div>
+                  <div className="shrink-0 text-[12px] font-[400] text-[#D4AF37]">{t('home.citySelected')}</div>
+                </div>
 
-            {filteredCities.length === 0 && (
-              <div className="mt-[12px] rounded-[12px] bg-[#1A1A1A] px-[14px] py-[14px] text-[13px] font-[400] text-[#9A9A9A]">
-                {t('home.noCitiesFound')}
+                <button
+                  type="button"
+                  onClick={() => {
+                    WebApp.HapticFeedback.selectionChanged();
+                    setCitySearch('');
+                    setIsCityPickerOpen(true);
+                  }}
+                  className="w-full rounded-[12px] border border-[#222222] bg-transparent px-[14px] py-[12px] text-[13px] font-[400] text-[#FFFFFF] transition-colors hover:border-[#D4AF37] hover:text-[#D4AF37]"
+                >
+                  {t('home.chooseOtherCity')}
+                </button>
               </div>
+            ) : (
+              <>
+                <div className="sticky top-0 mt-[12px] bg-[#111111] pb-[12px]">
+                  <input
+                    type="text"
+                    value={citySearch}
+                    onChange={(e) => setCitySearch(e.target.value)}
+                    placeholder={t('home.searchPlaceholder')}
+                    className="w-full rounded-[12px] border border-[#222222] bg-[#1A1A1A] px-[16px] py-[14px] text-[14px] text-[#FFFFFF] outline-none placeholder:text-[#9A9A9A]"
+                  />
+                </div>
+
+                <div className="space-y-[4px]">
+                  {filteredCities.map((city) => (
+                    <button
+                      key={city.id}
+                      type="button"
+                      onClick={() => {
+                        WebApp.HapticFeedback.selectionChanged();
+                        setCity(city.id);
+                        setCitySearch('');
+                        setIsCityPickerOpen(false);
+                      }}
+                      className="flex w-full items-center gap-[12px] rounded-[12px] border border-transparent px-[12px] py-[14px] text-left transition-colors hover:bg-[#151515]"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[14px] font-[600] text-[#FFFFFF]">{t(`cities.${city.cityKey}`)}</div>
+                        {!city.isActive && (
+                          <div className="mt-[4px] text-[12px] font-[400] text-[#9A9A9A]">{t('home.cityInactive')}</div>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                {filteredCities.length === 0 && (
+                  <div className="mt-[12px] rounded-[12px] bg-[#1A1A1A] px-[14px] py-[14px] text-[13px] font-[400] text-[#9A9A9A]">
+                    {t('home.noCitiesFound')}
+                  </div>
+                )}
+              </>
             )}
 
             <div className="mt-[16px] flex items-center justify-between gap-[12px] border-t border-[#222222] pt-[16px] text-[13px]">
