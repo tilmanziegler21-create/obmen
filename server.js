@@ -574,8 +574,12 @@ app.put('/api/admin/cities/:id', requireAdmin, (req, res) => {
       return;
     }
 
-    city.limitEUR = Math.max(0, Number(req.body?.limitEUR) || 0);
-    city.isActive = req.body?.isActive !== false;
+    if (req.body?.limitEUR !== undefined) {
+      city.limitEUR = Math.max(0, Number(req.body.limitEUR) || 0);
+    }
+    if (req.body?.isActive !== undefined) {
+      city.isActive = req.body.isActive !== false;
+    }
 
     writeState(state);
     // #region debug-point B:city-save-response
@@ -594,6 +598,37 @@ app.put('/api/admin/cities/:id', requireAdmin, (req, res) => {
       error: getErrorMessage(error),
     });
     // #endregion
+    res.status(500).json({ error: getErrorMessage(error) });
+  }
+});
+
+app.post('/api/admin/cities', requireAdmin, (req, res) => {
+  try {
+    const state = readState();
+    const newCityId = String(Date.now());
+    const newCity = {
+      id: newCityId,
+      cityKey: ensureString(req.body?.cityKey) || 'new_city',
+      isActive: true,
+      limitEUR: 0,
+    };
+    state.cities.push(newCity);
+    writeState(state);
+    res.json({ ok: true, state: getPublicState(state) });
+  } catch (error) {
+    console.error('Failed to add city', error);
+    res.status(500).json({ error: getErrorMessage(error) });
+  }
+});
+
+app.delete('/api/admin/cities/:id', requireAdmin, (req, res) => {
+  try {
+    const state = readState();
+    state.cities = state.cities.filter((item) => item.id !== req.params.id);
+    writeState(state);
+    res.json({ ok: true, state: getPublicState(state) });
+  } catch (error) {
+    console.error('Failed to delete city', error);
     res.status(500).json({ error: getErrorMessage(error) });
   }
 });

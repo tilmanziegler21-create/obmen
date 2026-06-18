@@ -117,6 +117,64 @@ export const useStore = create<ExchangeState>()(
         }
       },
       
+      addCity: async (cityKey) => {
+        try {
+          const response = await fetch('/api/admin/cities', {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'X-Telegram-Init-Data': WebApp.initData || '',
+            },
+            body: JSON.stringify({ cityKey }),
+          });
+          const data = await readJsonResponse<{ state?: SharedServerState; error?: string }>(response);
+
+          if (response.ok && data?.state) {
+            set({ ...data.state });
+            return { ok: true } satisfies SaveResult;
+          }
+
+          return {
+            ok: false,
+            error: data?.error || `HTTP ${response.status}`,
+          } satisfies SaveResult;
+        } catch (error) {
+          console.error('Failed to add city', error);
+          return {
+            ok: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          } satisfies SaveResult;
+        }
+      },
+
+      removeCity: async (id) => {
+        try {
+          const response = await fetch(`/api/admin/cities/${id}`, {
+            method: 'DELETE',
+            headers: { 
+              'X-Telegram-Init-Data': WebApp.initData || '',
+            },
+          });
+          const data = await readJsonResponse<{ state?: SharedServerState; error?: string }>(response);
+
+          if (response.ok && data?.state) {
+            set({ ...data.state });
+            return { ok: true } satisfies SaveResult;
+          }
+
+          return {
+            ok: false,
+            error: data?.error || `HTTP ${response.status}`,
+          } satisfies SaveResult;
+        } catch (error) {
+          console.error('Failed to remove city', error);
+          return {
+            ok: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          } satisfies SaveResult;
+        }
+      },
+      
       updateCityLimit: async (id, limit) => {
         await get().saveCityConfig(id, { limitEUR: limit });
       },

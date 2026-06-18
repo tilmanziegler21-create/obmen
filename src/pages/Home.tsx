@@ -393,7 +393,7 @@ export default function Home() {
           <div ref={calculatorRef} className="pt-[16px]">
             <h3 className="mb-[16px] flex items-center text-[18px] font-[700] text-[#FFFFFF]">
               <span className="mr-[8px] h-[16px] w-[4px] rounded-full bg-[#00CC66]" />
-              Конфигуратор обмена
+              {t('home.calculatorTitle')}
             </h3>
 
             <section className="premium-animated-calculator relative overflow-hidden rounded-[24px] border border-[#222222] p-[20px] shadow-lg">
@@ -497,7 +497,9 @@ export default function Home() {
                 <div className="mt-[12px] space-y-[12px]">
                   <div className="flex w-full items-center gap-[12px] rounded-[12px] bg-[#1A1A1A] px-[12px] py-[14px] text-left">
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-[14px] font-[600] text-[#FFFFFF]">{t(`cities.${currentCity.cityKey}`)}</div>
+                      <div className="truncate text-[14px] font-[600] text-[#FFFFFF]">
+                        {t(`cities.${currentCity.cityKey}`).startsWith('cities.') ? currentCity.cityKey : t(`cities.${currentCity.cityKey}`)}
+                      </div>
                       {!currentCity.isActive && (
                         <div className="mt-[4px] text-[12px] font-[400] text-[#9A9A9A]">{t('home.cityInactive')}</div>
                       )}
@@ -543,7 +545,9 @@ export default function Home() {
                         className="flex w-full items-center gap-[12px] rounded-[12px] border border-transparent px-[12px] py-[14px] text-left transition-colors hover:bg-[#1A1A1A]"
                       >
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-[14px] font-[600] text-[#FFFFFF]">{t(`cities.${city.cityKey}`)}</div>
+                          <div className="truncate text-[14px] font-[600] text-[#FFFFFF]">
+                            {t(`cities.${city.cityKey}`).startsWith('cities.') ? city.cityKey : t(`cities.${city.cityKey}`)}
+                          </div>
                           {!city.isActive && (
                             <div className="mt-[4px] text-[12px] font-[400] text-[#9A9A9A]">{t('home.cityInactive')}</div>
                           )}

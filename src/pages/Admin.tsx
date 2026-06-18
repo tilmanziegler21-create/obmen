@@ -26,6 +26,8 @@ export default function Admin() {
     updateAntiPhishingCode,
     updateOrderStatus,
     updateOrderManager,
+    addCity,
+    removeCity,
   } = useStore();
   
   const user = WebApp.initDataUnsafe?.user;
@@ -52,6 +54,8 @@ export default function Admin() {
   const [onlyMyOrders, setOnlyMyOrders] = useState(false);
   const [citySaveState, setCitySaveState] = useState<Record<string, 'idle' | 'saving' | 'saved' | 'error'>>({});
   const [citySaveErrorMessage, setCitySaveErrorMessage] = useState<Record<string, string>>({});
+  const [newCityName, setNewCityName] = useState('');
+  const [isAddingCity, setIsAddingCity] = useState(false);
 
   useEffect(() => {
     setEditLimits(cities.reduce((acc, city) => ({ ...acc, [city.id]: city.limitEUR.toString() }), {}));
@@ -166,13 +170,26 @@ export default function Admin() {
     setCitySaveState((prev) => ({ ...prev, [id]: 'saving' }));
     setCitySaveErrorMessage((prev) => ({ ...prev, [id]: '' }));
     const result = await saveCityConfig(id, {
-      limitEUR: Number(editLimits[id]) || city.limitEUR,
       isActive: !city.isActive,
     });
     setCitySaveState((prev) => ({ ...prev, [id]: result.ok ? 'saved' : 'error' }));
     if (!result.ok) {
       setCitySaveErrorMessage((prev) => ({ ...prev, [id]: result.error ?? '' }));
     }
+  };
+
+  const handleAddCity = async () => {
+    if (!newCityName.trim()) return;
+    WebApp.HapticFeedback.impactOccurred('medium');
+    setIsAddingCity(true);
+    await addCity(newCityName.trim());
+    setNewCityName('');
+    setIsAddingCity(false);
+  };
+
+  const handleRemoveCity = async (id: string) => {
+    WebApp.HapticFeedback.impactOccurred('medium');
+    await removeCity(id);
   };
 
   const handleClaimOrder = async (orderId: string) => {
@@ -209,59 +226,52 @@ export default function Admin() {
           </div>
 
           <div className="space-y-[12px]">
-            {cities.map((city) => (
-              <div key={city.id} className={`p-[16px] rounded-[16px] border-[1.5px] transition-all bg-bg3 ${city.isActive ? 'border-border2' : 'border-error/30 opacity-60'}`}>
+            {cities.map((city) => {
+              const translatedName = t(`cities.${city.cityKey}`);
+              const displayName = translatedName.startsWith('cities.') ? city.cityKey : translatedName;
+              return (
+              <div key={city.id} className={`p-[16px] rounded-[16px] border-[1.5px] transition-all bg-bg3 flex items-center justify-between ${city.isActive ? 'border-border2' : 'border-error/30 opacity-60'}`}>
                 
-                <div className="flex justify-between items-center mb-[12px]">
-                  <div className="flex items-center gap-[8px]">
-                    <span className="font-[700] text-[15px] text-text">{t(`cities.${city.cityKey}`)}</span>
-                  </div>
-                  
+                <div className="flex items-center gap-[8px]">
+                  <span className="font-[700] text-[15px] text-text">{displayName}</span>
+                </div>
+                
+                <div className="flex items-center gap-[8px]">
                   <button 
                     onClick={() => handleToggle(city.id)}
                     className={`text-[10px] font-[600] uppercase tracking-[0.06em] px-[8px] py-[4px] rounded-[6px] border transition-colors ${city.isActive ? 'bg-[rgba(0,208,132,0.1)] text-green border-green/30' : 'bg-[rgba(248,113,113,0.1)] text-error border-error/30'}`}
                   >
                     {city.isActive ? t('admin.active') : t('admin.disabled')}
                   </button>
-                </div>
-
-                <div className="flex flex-col gap-[8px] min-[360px]:flex-row min-[360px]:items-center">
-                  <div className="flex-1 relative">
-                    <span className="absolute left-[12px] top-1/2 -translate-y-1/2 text-muted font-mono">€</span>
-                    <input 
-                      type="number"
-                      value={editLimits[city.id]}
-                      onChange={(e) => setEditLimits({ ...editLimits, [city.id]: e.target.value })}
-                      className="w-full bg-bg2 border border-border2 rounded-[8px] py-[10px] pl-[28px] pr-[12px] text-[14px] font-mono text-text outline-none focus:border-green transition-colors"
-                    />
-                  </div>
                   <button 
-                    onClick={() => handleSave(city.id)}
-                    className="bg-bg2 border border-border2 hover:border-green hover:text-green text-muted px-[16px] py-[10px] rounded-[8px] text-[12px] font-[600] transition-colors min-[360px]:self-auto"
+                    onClick={() => handleRemoveCity(city.id)}
+                    className="text-error opacity-70 hover:opacity-100 transition-opacity p-[4px]"
                   >
-                    {t('admin.save')}
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6M14 11v6" />
+                    </svg>
                   </button>
                 </div>
-                <div className={`mt-[6px] text-[11px] font-[600] ${
-                  citySaveState[city.id] === 'saved'
-                    ? 'text-green'
-                    : citySaveState[city.id] === 'error'
-                      ? 'text-error'
-                      : 'text-dim'
-                }`}>
-                  {citySaveState[city.id] === 'saving'
-                    ? t('admin.citySaving')
-                    : citySaveState[city.id] === 'saved'
-                      ? t('admin.citySaved')
-                      : citySaveState[city.id] === 'error'
-                        ? t('admin.citySaveError', { message: citySaveErrorMessage[city.id] || 'Unknown error' })
-                        : t('admin.citySaveIdle')}
-                </div>
-
               </div>
-            ))}
+            )})}
           </div>
 
+          <div className="flex items-center gap-[8px] mt-[16px]">
+            <input 
+              type="text"
+              value={newCityName}
+              onChange={(e) => setNewCityName(e.target.value)}
+              placeholder="Добавить город"
+              className="flex-1 bg-bg3 border border-border2 rounded-[8px] py-[10px] px-[12px] text-[14px] text-text outline-none focus:border-green transition-colors"
+            />
+            <button 
+              onClick={handleAddCity}
+              disabled={isAddingCity || !newCityName.trim()}
+              className="bg-green hover:bg-[#00B359] text-black px-[16px] py-[10px] rounded-[8px] text-[12px] font-[700] uppercase tracking-wider transition-colors disabled:opacity-50"
+            >
+              +
+            </button>
+          </div>
         </div>
 
         <div className="bg-bg2 border-[1.5px] border-border2 rounded-r2 p-[20px] space-y-[16px]">
@@ -440,11 +450,14 @@ export default function Admin() {
                   className="w-full rounded-[10px] border border-border2 bg-bg2 px-[12px] py-[11px] text-[13px] text-text outline-none transition-colors focus:border-green"
                 >
                   <option value="all">{t('admin.allCities')}</option>
-                  {cities.map((city) => (
+                  {cities.map((city) => {
+                    const translatedName = t(`cities.${city.cityKey}`);
+                    const displayName = translatedName.startsWith('cities.') ? city.cityKey : translatedName;
+                    return (
                     <option key={city.id} value={city.id}>
-                      {t(`cities.${city.cityKey}`)}
+                      {displayName}
                     </option>
-                  ))}
+                  )})}
                 </select>
               </div>
 
@@ -494,7 +507,7 @@ export default function Admin() {
                     <div>
                       <div className="text-[13px] font-[700] text-text">{order.id}</div>
                       <div className="mt-[4px] text-[12px] font-[500] text-muted">
-                        {t(`cities.${order.cityKey}`)} · {order.giveAmount} {order.giveCurrency} {'->'} {order.getAmount} {order.getCurrency}
+                        {t(`cities.${order.cityKey}`).startsWith('cities.') ? order.cityKey : t(`cities.${order.cityKey}`)} · {order.giveAmount} {order.giveCurrency} {'->'} {order.getAmount} {order.getCurrency}
                       </div>
                       <div className="mt-[4px] text-[11px] font-[500] text-dim">
                         {getRouteLabel(

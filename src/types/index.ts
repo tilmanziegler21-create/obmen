@@ -104,6 +104,8 @@ export interface ExchangeState {
   
   // Admin Actions
   saveCityConfig: (id: string, config: Partial<Pick<City, 'limitEUR' | 'isActive'>>) => Promise<SaveResult>;
+  addCity: (cityKey: string) => Promise<SaveResult>;
+  removeCity: (id: string) => Promise<SaveResult>;
   updateCityLimit: (id: string, limit: number) => Promise<void>;
   updateUsdtReserve: (amount: number) => Promise<void>;
   updateRate: (rate: number) => Promise<void>;

@@ -141,7 +141,7 @@ export default function Orders() {
                         {order.giveCurrency} {'->'} {order.getCurrency}
                       </div>
                       <div className="mt-[6px] text-[12px] font-[400] text-[#808080]">
-                        {t('home.orderNumber', { id: order.id })} · {t(`cities.${order.cityKey}`)}
+                        {t('home.orderNumber', { id: order.id })} · {t(`cities.${order.cityKey}`).startsWith('cities.') ? order.cityKey : t(`cities.${order.cityKey}`)}
                       </div>
                     </div>
                     <div className="shrink-0 text-right">

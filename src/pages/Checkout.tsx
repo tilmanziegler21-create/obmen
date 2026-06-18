@@ -39,7 +39,7 @@ export default function Checkout() {
     : (WebApp.initDataUnsafe?.user?.first_name || t('checkout.unknownUser'));
 
   const city = cities.find(c => c.id === selectedCityId);
-  const cityName = city ? t(`cities.${city.cityKey}`) : '-';
+  const cityName = city ? (t(`cities.${city.cityKey}`).startsWith('cities.') ? city.cityKey : t(`cities.${city.cityKey}`)) : '-';
   const direction = getDirectionFromGiveAsset(selectedGiveAsset);
   const requiresWallet = selectedGetAsset === 'USDT';
   const requiresContact = selectedGetAsset === 'EUR_CASH';
@@ -219,12 +219,12 @@ export default function Checkout() {
         </div>
 
         {/* Order Summary Card */}
-        <div className="bg-bg2 border-[1.5px] border-border2 rounded-r2 p-[20px] space-y-[16px]">
-          <h2 className="text-[14px] font-[700] text-text mb-[16px]">{t('checkout.detailsTitle')}</h2>
+        <div className="bg-[#111111] border-[1.5px] border-[#222222] rounded-r2 p-[20px] space-y-[16px]">
+          <h2 className="text-[14px] font-[700] text-[#FFFFFF] mb-[16px]">{t('checkout.detailsTitle')}</h2>
           
           <div className="flex items-center justify-between gap-[12px] text-[13px]">
-            <span className="text-muted font-[500]">{t('checkout.city')}</span>
-            <span className="text-right font-[700] text-text">{cityName}</span>
+            <span className="text-[#808080] font-[500]">{t('checkout.city')}</span>
+            <span className="text-right font-[700] text-[#FFFFFF]">{cityName}</span>
           </div>
           
           <div className="flex items-center justify-between gap-[12px] text-[13px]">
