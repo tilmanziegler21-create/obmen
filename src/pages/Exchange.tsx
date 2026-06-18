@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import WebApp from '@twa-dev/sdk';
 import { useNavigate } from 'react-router-dom';
@@ -60,13 +60,16 @@ export default function Exchange() {
   } = useStore();
 
   const user = WebApp.initDataUnsafe?.user;
+  const currentUserId = user?.id ? String(user.id) : null;
   const currentUserHandle = user?.username ? `@${user.username}` : (user?.first_name || t('checkout.unknownUser'));
   const [citySearch, setCitySearch] = useState('');
   const [activeAssetSheet, setActiveAssetSheet] = useState<'give' | 'get' | null>(null);
+  const [isAmountConfirmed, setIsAmountConfirmed] = useState(false);
+  const amountInputRef = useRef<HTMLInputElement>(null);
 
   const metrics = useMemo(
-    () => calculateCustomerMetrics(orders, currentUserHandle),
-    [currentUserHandle, orders],
+    () => calculateCustomerMetrics(orders, currentUserHandle, currentUserId),
+    [currentUserHandle, currentUserId, orders],
   );
   const benefits = useMemo(
     () => getCustomerBenefits(metrics, profileSettings.activatedReferralCode),
@@ -157,6 +160,14 @@ export default function Exchange() {
     navigate('/checkout');
   };
 
+  const handleConfirmAmount = () => {
+    amountInputRef.current?.blur();
+    if (giveAmount) {
+      setIsAmountConfirmed(true);
+      WebApp.HapticFeedback.selectionChanged();
+    }
+  };
+
   return (
     <>
       <motion.div
@@ -211,15 +222,38 @@ export default function Exchange() {
                 <div className="mb-[8px] text-[12px] font-[400] text-[#9A9A9A]">{t('home.youGive')}</div>
                 <div className="flex h-[64px] items-center justify-between gap-[12px] rounded-[12px] bg-[#1A1A1A] px-[16px]">
                   <input
+                    ref={amountInputRef}
                     type="number"
                     value={giveAmount}
-                    onChange={(e) => setGiveAmount(e.target.value)}
+                    onChange={(e) => {
+                      setIsAmountConfirmed(false);
+                      setGiveAmount(e.target.value);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleConfirmAmount();
+                      }
+                    }}
                     placeholder="0"
                     min="0"
                     step={selectedGiveAsset === 'EUR_CASH' ? '10' : selectedGiveAsset === 'USDT' ? '0.01' : '1'}
                     inputMode="decimal"
                     className="min-w-0 flex-1 bg-transparent text-[28px] font-[600] text-[#FFFFFF] outline-none placeholder:text-[#9A9A9A]"
                   />
+                  <button
+                    type="button"
+                    onClick={handleConfirmAmount}
+                    className={`flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full border transition-colors ${
+                      giveAmount
+                        ? 'border-[#D4AF37] bg-[#D4AF37] text-[#000000]'
+                        : 'border-[#222222] bg-[#111111] text-[#808080]'
+                    }`}
+                    aria-label="Confirm amount"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                      <path d="M3 8.2l3 3L13 4.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
                   <button
                     type="button"
                     onClick={() => setActiveAssetSheet('give')}
@@ -275,7 +309,14 @@ export default function Exchange() {
                 </span>
                 <span>{t('home.commissionIncluded')}</span>
               </div>
-              <div className="text-right font-[600] text-[#FFFFFF]">{benefits.effectiveCommissionPercent.toFixed(1)}%</div>
+              <div className="flex items-center gap-[10px]">
+                {giveAmount && (
+                  <span className={`text-[12px] font-[400] ${isAmountConfirmed ? 'text-[#D4AF37]' : 'text-[#9A9A9A]'}`}>
+                    {isAmountConfirmed ? t('home.amountConfirmed') : t('home.amountEditing')}
+                  </span>
+                )}
+                <div className="text-right font-[600] text-[#FFFFFF]">{benefits.effectiveCommissionPercent.toFixed(1)}%</div>
+              </div>
             </div>
           </section>
 
@@ -300,13 +341,16 @@ export default function Exchange() {
                     WebApp.HapticFeedback.selectionChanged();
                     setCity(city.id);
                   }}
-                  className={`flex w-full items-center rounded-[12px] px-[12px] py-[14px] text-left transition-colors ${selectedCityId === city.id ? 'bg-[#1A1A1A]' : 'bg-transparent hover:bg-[#151515]'}`}
+                  className="flex w-full items-center gap-[12px] rounded-[12px] border border-transparent px-[12px] py-[14px] text-left transition-colors hover:bg-[#151515]"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[14px] font-[600] text-[#FFFFFF]">{t(`cities.${city.cityKey}`)}</div>
                     {!city.isActive && (
                       <div className="mt-[4px] text-[12px] font-[400] text-[#9A9A9A]">{t('home.cityInactive')}</div>
                     )}
+                  </div>
+                  <div className={`shrink-0 text-[12px] font-[400] ${selectedCityId === city.id ? 'text-[#D4AF37]' : 'text-[#808080]'}`}>
+                    {selectedCityId === city.id ? t('home.citySelected') : ''}
                   </div>
                 </button>
               ))}
@@ -320,7 +364,7 @@ export default function Exchange() {
 
             <div className="mt-[16px] flex items-center justify-between gap-[12px] border-t border-[#222222] pt-[16px] text-[13px]">
               <div className="flex items-center gap-[8px] text-[#9A9A9A]">
-                <span>{currentCity ? t(`cities.${currentCity.cityKey}`) : t('home.cityRequired')}</span>
+                <span>{currentCity ? t('home.selectedCitySummary', { city: t(`cities.${currentCity.cityKey}`) }) : t('home.cityRequired')}</span>
               </div>
               <div className="text-right font-[400] text-[#9A9A9A]">
                 {currentCity && !currentCity.isActive ? t('home.cityInactive') : ''}

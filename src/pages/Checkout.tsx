@@ -33,6 +33,7 @@ export default function Checkout() {
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const currentUserId = telegramUserId ? String(telegramUserId) : null;
   const userHandle = WebApp.initDataUnsafe?.user?.username 
     ? `@${WebApp.initDataUnsafe.user.username}` 
     : (WebApp.initDataUnsafe?.user?.first_name || t('checkout.unknownUser'));
@@ -51,8 +52,8 @@ export default function Checkout() {
     (selectedGetAsset === 'EUR_CASH' && requiredCashReserve > city.limitEUR) ||
     (selectedGetAsset === 'USDT' && requiredUsdtReserve > usdtReserve);
   const metrics = useMemo(
-    () => calculateCustomerMetrics(orders, userHandle),
-    [orders, userHandle],
+    () => calculateCustomerMetrics(orders, userHandle, currentUserId),
+    [currentUserId, orders, userHandle],
   );
   const benefits = useMemo(
     () => getCustomerBenefits(metrics, profileSettings.activatedReferralCode),

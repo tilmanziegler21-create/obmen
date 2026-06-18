@@ -34,7 +34,7 @@ function AppShell() {
     <div className="min-h-screen w-full max-w-[420px] mx-auto relative flex flex-col bg-[#000000] text-[#FFFFFF]">
       <div
         className="relative z-10 flex-1 flex flex-col"
-        style={{ paddingBottom: showBottomNav ? 'max(12px, env(safe-area-inset-bottom))' : '0px' }}
+        style={{ paddingBottom: showBottomNav ? 'calc(78px + env(safe-area-inset-bottom))' : '0px' }}
       >
         <Suspense fallback={<div className="flex-1 bg-bg2" />}>
           <Routes>

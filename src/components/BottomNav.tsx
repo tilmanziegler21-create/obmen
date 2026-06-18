@@ -50,7 +50,7 @@ export default function BottomNav() {
 
   return (
     <div
-      className="sticky bottom-0 z-20 mt-auto border-t border-[#222222] bg-[rgba(0,0,0,0.9)] px-[8px] pt-[8px] backdrop-blur-xl"
+      className="fixed bottom-0 left-1/2 z-30 w-full max-w-[420px] -translate-x-1/2 border-t border-[#222222] bg-[rgba(0,0,0,0.9)] px-[8px] pt-[8px] backdrop-blur-xl"
       style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}
     >
       <div className="grid grid-cols-4 gap-[6px]">

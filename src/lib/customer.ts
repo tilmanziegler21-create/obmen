@@ -21,8 +21,20 @@ export interface CustomerBenefits {
 
 const BASE_COMMISSION_PERCENT = 4;
 
-export function calculateCustomerMetrics(orders: ExchangeOrder[], userHandle: string): CustomerMetrics {
-  const userOrders = orders.filter((order) => order.userHandle === userHandle);
+export function isOrderOwnedByUser(order: ExchangeOrder, userHandle: string, userId?: string | number | null): boolean {
+  if (userId && order.userId) {
+    return String(order.userId) === String(userId);
+  }
+
+  return order.userHandle === userHandle;
+}
+
+export function calculateCustomerMetrics(
+  orders: ExchangeOrder[],
+  userHandle: string,
+  userId?: string | number | null,
+): CustomerMetrics {
+  const userOrders = orders.filter((order) => isOrderOwnedByUser(order, userHandle, userId));
 
   if (userOrders.length === 0) {
     return {

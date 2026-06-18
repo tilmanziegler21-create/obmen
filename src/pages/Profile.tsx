@@ -12,6 +12,7 @@ export default function Profile() {
   const { t, language } = useI18n();
   const { orders, antiPhishingCode, profileSettings, updateProfileSettings } = useStore();
   const user = WebApp.initDataUnsafe?.user;
+  const currentUserId = user?.id ? String(user.id) : null;
   const adminIds = (import.meta.env.VITE_ADMIN_IDS || '').split(',').map((id: string) => id.trim());
   const isAdmin = user?.id ? adminIds.includes(user.id.toString()) : false;
   const currentUserHandle = user?.username ? `@${user.username}` : (user?.first_name || t('checkout.unknownUser'));
@@ -19,8 +20,8 @@ export default function Profile() {
   const [draft, setDraft] = useState(profileSettings);
 
   const metrics = useMemo(
-    () => calculateCustomerMetrics(orders, currentUserHandle),
-    [currentUserHandle, orders],
+    () => calculateCustomerMetrics(orders, currentUserHandle, currentUserId),
+    [currentUserHandle, currentUserId, orders],
   );
   const benefits = useMemo(
     () => getCustomerBenefits(metrics, profileSettings.activatedReferralCode),

@@ -38,6 +38,7 @@ export interface ExchangeOrder {
   contact: string | null;
   cardNumber: string | null;
   userHandle: string;
+  userId?: string | null;
   managerName: string | null;
   antiPhishingCode: string | null;
   commissionPercent: number;

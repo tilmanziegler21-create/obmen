@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useStore } from '../store';
 import { useI18n } from '../i18n';
-import { calculateCustomerMetrics, generateReferralCode, getCustomerBenefits } from '../lib/customer';
+import { calculateCustomerMetrics, generateReferralCode, getCustomerBenefits, isOrderOwnedByUser } from '../lib/customer';
 
 export default function Home() {
   const navigate = useNavigate();
@@ -22,21 +22,22 @@ export default function Home() {
   const [isReferralCopied, setIsReferralCopied] = useState(false);
 
   const user = WebApp.initDataUnsafe?.user;
+  const currentUserId = user?.id ? String(user.id) : null;
   const currentUserHandle = user?.username ? `@${user.username}` : (user?.first_name || t('checkout.unknownUser'));
   const adminIds = (import.meta.env.VITE_ADMIN_IDS || '').split(',').map((id: string) => id.trim());
   const isAdmin = user?.id ? adminIds.includes(user.id.toString()) : false;
 
   const metrics = useMemo(
-    () => calculateCustomerMetrics(orders, currentUserHandle),
-    [currentUserHandle, orders],
+    () => calculateCustomerMetrics(orders, currentUserHandle, currentUserId),
+    [currentUserHandle, currentUserId, orders],
   );
   const benefits = useMemo(
     () => getCustomerBenefits(metrics, profileSettings.activatedReferralCode),
     [metrics, profileSettings.activatedReferralCode],
   );
   const currentUserOrders = useMemo(
-    () => orders.filter((order) => order.userHandle === currentUserHandle),
-    [currentUserHandle, orders],
+    () => orders.filter((order) => isOrderOwnedByUser(order, currentUserHandle, currentUserId)),
+    [currentUserHandle, currentUserId, orders],
   );
   const invitedUsersCount = useMemo(
     () =>
@@ -45,11 +46,11 @@ export default function Home() {
           .filter(
             (order) =>
               order.referralCodeUsed === profileSettings.referralCode &&
-              order.userHandle !== currentUserHandle,
+              !isOrderOwnedByUser(order, currentUserHandle, currentUserId),
           )
           .map((order) => order.userHandle),
       ).size,
-    [currentUserHandle, orders, profileSettings.referralCode],
+    [currentUserHandle, currentUserId, orders, profileSettings.referralCode],
   );
   const latestActiveOrder = useMemo(
     () => currentUserOrders.find((order) => order.status === 'accepted' || order.status === 'processing' || order.status === 'ready') ?? null,
@@ -153,41 +154,6 @@ export default function Home() {
       </header>
 
       <div className="space-y-[16px]">
-        <button
-          type="button"
-          onClick={handleCopyReferralCode}
-          className="w-full rounded-[16px] border border-[#222222] bg-[#111111] px-[24px] py-[24px] text-left transition-colors hover:border-[#D4AF37]"
-        >
-          <div className="flex items-start justify-between gap-[16px]">
-            <div>
-              <div className="text-[12px] font-[400] uppercase tracking-[0.12em] text-[#9A9A9A]">{t('home.referralProgramTitle')}</div>
-              <div className="mt-[10px] text-[24px] font-[600] leading-[1.1] text-[#FFFFFF]">
-                {profileSettings.referralCode}
-              </div>
-              <div className="mt-[8px] text-[13px] font-[400] leading-[1.6] text-[#9A9A9A]">
-                {isReferralCopied ? t('home.referralCopied') : t('home.referralCopyHint')}
-              </div>
-            </div>
-            <div className="flex h-[36px] w-[36px] shrink-0 items-center justify-center rounded-[12px] border border-[#222222] bg-[#1A1A1A] text-[#D4AF37]">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <rect x="5" y="3" width="8" height="10" rx="2" stroke="currentColor" strokeWidth="1.4" />
-                <path d="M3 11V5a2 2 0 0 1 2-2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-              </svg>
-            </div>
-          </div>
-
-          <div className="mt-[18px] grid grid-cols-2 gap-[12px] border-t border-[#222222] pt-[18px]">
-            <div>
-              <div className="text-[12px] font-[400] text-[#9A9A9A]">{t('home.invitedUsersLabel')}</div>
-              <div className="mt-[6px] text-[20px] font-[600] text-[#FFFFFF]">{invitedUsersCount}</div>
-            </div>
-            <div>
-              <div className="text-[12px] font-[400] text-[#9A9A9A]">{t('home.discountLabel')}</div>
-              <div className="mt-[6px] text-[20px] font-[600] text-[#FFFFFF]">{benefits.totalDiscountPercent.toFixed(1)}%</div>
-            </div>
-          </div>
-        </button>
-
         <section className="rounded-[16px] border border-[#222222] bg-[#111111] px-[24px] py-[24px]">
           <div className="flex items-center gap-[8px] text-[12px] font-[400] text-[#9A9A9A]">
             <span className={`h-[8px] w-[8px] rounded-full ${latestActiveOrder ? activeOrderStatusDotClass : 'bg-[#222222]'}`}></span>
@@ -217,28 +183,63 @@ export default function Home() {
           )}
         </section>
 
-        <section className="px-[8px] py-[4px]">
-          <div className="text-[11px] font-[400] uppercase tracking-[0.12em] text-[#9A9A9A]">{t('home.rateLabel')}</div>
-          <div className="mt-[10px] text-left text-[28px] font-[600] leading-[1.15] text-[#FFFFFF]">1 EUR = {rates.EUR_USDT.toFixed(4)} USDT</div>
-          <div className="mt-[8px] text-[12px] font-[400] text-[#9A9A9A]">{t('home.rateUpdated', { time: formattedRateUpdatedAt })}</div>
+        <section className="rounded-[16px] border border-[#222222] bg-[#111111] px-[24px] py-[24px]">
+          <div className="flex items-start justify-between gap-[12px]">
+            <div>
+              <div className="text-[11px] font-[400] uppercase tracking-[0.12em] text-[#9A9A9A]">{t('home.rateLabel')}</div>
+              <div className="mt-[8px] text-left text-[26px] font-[600] leading-[1.1] text-[#FFFFFF]">1 EUR = {rates.EUR_USDT.toFixed(4)} USDT</div>
+              <div className="mt-[8px] text-[12px] font-[400] text-[#9A9A9A]">{t('home.rateUpdated', { time: formattedRateUpdatedAt })}</div>
+            </div>
+            <div className="rounded-[12px] border border-[#222222] bg-[#1A1A1A] px-[10px] py-[8px] text-[11px] font-[400] text-[#D4AF37]">
+              {t('home.executionTime')}
+            </div>
+          </div>
+
+          <div className="mt-[20px] grid grid-cols-2 gap-[12px] border-t border-[#222222] pt-[20px]">
+            <div>
+              <div className="text-[12px] font-[400] text-[#9A9A9A]">{t('home.reserveUsdt')}</div>
+              <div className="mt-[6px] text-[20px] font-[600] text-[#FFFFFF]">{usdtReserve.toFixed(0)}</div>
+            </div>
+            <div>
+              <div className="text-[12px] font-[400] text-[#9A9A9A]">{t('home.reserveCash')}</div>
+              <div className="mt-[6px] text-[20px] font-[600] text-[#FFFFFF]">{totalCashReserve.toFixed(0)}€</div>
+            </div>
+          </div>
         </section>
 
-        <section className="space-y-[12px] px-[8px] py-[4px] text-[14px]">
+        <section className="rounded-[16px] border border-[#222222] bg-[#111111] px-[24px] py-[24px]">
           <div className="flex items-center justify-between gap-[12px]">
-            <span className="font-[400] text-[#9A9A9A]">{t('home.commissionLabel')}</span>
-            <span className="text-right font-[600] text-[#FFFFFF]">{benefits.effectiveCommissionPercent.toFixed(1)}%</span>
+            <div className="text-[11px] font-[400] uppercase tracking-[0.12em] text-[#9A9A9A]">{t('home.clientTermsTitle')}</div>
+            <button
+              type="button"
+              onClick={handleCopyReferralCode}
+              className="inline-flex items-center gap-[8px] rounded-[12px] border border-[#222222] bg-[#1A1A1A] px-[10px] py-[8px] text-[12px] font-[400] text-[#FFFFFF] transition-colors hover:border-[#D4AF37] hover:text-[#D4AF37]"
+            >
+              <span>{profileSettings.referralCode}</span>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <rect x="5" y="3" width="8" height="10" rx="2" stroke="currentColor" strokeWidth="1.4" />
+                <path d="M3 11V5a2 2 0 0 1 2-2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
+            </button>
           </div>
-          <div className="flex items-center justify-between gap-[12px]">
-            <span className="font-[400] text-[#9A9A9A]">{t('home.discountLabel')}</span>
-            <span className="text-right font-[600] text-[#FFFFFF]">{benefits.totalDiscountPercent.toFixed(1)}%</span>
+
+          <div className="mt-[8px] text-[12px] font-[400] text-[#9A9A9A]">
+            {isReferralCopied ? t('home.referralCopied') : t('home.referralCopyHint')}
           </div>
-          <div className="flex items-center justify-between gap-[12px]">
-            <span className="font-[400] text-[#9A9A9A]">{t('home.reserveUsdt')}</span>
-            <span className="text-right font-[600] text-[#FFFFFF]">{usdtReserve.toFixed(0)}</span>
-          </div>
-          <div className="flex items-center justify-between gap-[12px]">
-            <span className="font-[400] text-[#9A9A9A]">{t('home.reserveCash')}</span>
-            <span className="text-right font-[600] text-[#FFFFFF]">{totalCashReserve.toFixed(0)}€</span>
+
+          <div className="mt-[18px] space-y-[12px] text-[14px]">
+            <div className="flex items-center justify-between gap-[12px]">
+              <span className="font-[400] text-[#9A9A9A]">{t('home.commissionLabel')}</span>
+              <span className="text-right font-[600] text-[#FFFFFF]">{benefits.effectiveCommissionPercent.toFixed(1)}%</span>
+            </div>
+            <div className="flex items-center justify-between gap-[12px]">
+              <span className="font-[400] text-[#9A9A9A]">{t('home.discountLabel')}</span>
+              <span className="text-right font-[600] text-[#FFFFFF]">{benefits.totalDiscountPercent.toFixed(1)}%</span>
+            </div>
+            <div className="flex items-center justify-between gap-[12px]">
+              <span className="font-[400] text-[#9A9A9A]">{t('home.invitedUsersLabel')}</span>
+              <span className="text-right font-[600] text-[#FFFFFF]">{invitedUsersCount}</span>
+            </div>
           </div>
         </section>
 

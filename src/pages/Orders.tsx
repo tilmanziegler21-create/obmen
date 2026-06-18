@@ -5,6 +5,7 @@ import WebApp from '@twa-dev/sdk';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useStore } from '../store';
 import { useI18n } from '../i18n';
+import { isOrderOwnedByUser } from '../lib/customer';
 
 interface OrdersLocationState {
   orderId?: string;
@@ -17,13 +18,14 @@ export default function Orders() {
   const { t, language } = useI18n();
   const { orders, profileSettings, applyOrderTemplate } = useStore();
   const user = WebApp.initDataUnsafe?.user;
+  const currentUserId = user?.id ? String(user.id) : null;
   const currentUserHandle = user?.username ? `@${user.username}` : (user?.first_name || t('checkout.unknownUser'));
   const locationState = (location.state as OrdersLocationState | null) ?? null;
   const highlightedOrderId = locationState?.orderId ?? null;
 
   const currentUserOrders = useMemo(
-    () => orders.filter((order) => order.userHandle === currentUserHandle),
-    [currentUserHandle, orders],
+    () => orders.filter((order) => isOrderOwnedByUser(order, currentUserHandle, currentUserId)),
+    [currentUserHandle, currentUserId, orders],
   );
   const highlightedOrder = useMemo(
     () => currentUserOrders.find((order) => order.id === highlightedOrderId) ?? null,
