@@ -472,17 +472,12 @@ export default function Home() {
                 </div>
               </div>
               
-              <div className="relative z-10 mt-[16px] flex items-center justify-between border-t border-[#222222] pt-[16px] text-[13px]">
-                <div className="flex items-center gap-[8px] text-[#9A9A9A]">
-                  <span className="inline-flex h-[20px] w-[20px] items-center justify-center rounded-full border border-[#222222] bg-[#1A1A1A] text-[#00CC66]">
-                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
-                      <path d="M3 8.2l3 3L13 4.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </span>
-                  <span className="opacity-80">{t('home.commissionIncluded')}</span>
-                </div>
-                <div className="flex items-center gap-[10px]">
-                  <div className="rounded border border-[#00CC66]/20 bg-[#00CC66]/10 px-2 py-0.5 text-right font-[700] tracking-wide text-[#00CC66]">{benefits.effectiveCommissionPercent.toFixed(1)}%</div>
+              <div className="relative z-10 mt-[16px] flex items-center justify-center border-t border-[#222222] pt-[16px] text-[12px]">
+                <div className="flex items-center gap-[6px] text-[#808080]">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-[#00CC66]">
+                    <path d="M20 6L9 17l-5-5" />
+                  </svg>
+                  <span>{t('home.commissionIncluded')}</span>
                 </div>
               </div>
             </section>
@@ -492,16 +487,20 @@ export default function Home() {
               <div className="mb-[16px] text-[12px] font-[600] uppercase tracking-wider text-[#9A9A9A]">{t('home.cityTitle')}</div>
               {currentCity && !isCityPickerOpen ? (
                 <div className="mt-[12px] space-y-[12px]">
-                  <div className="flex w-full items-center gap-[12px] rounded-[12px] bg-[#1A1A1A] px-[12px] py-[14px] text-left">
+                  <div className="flex w-full items-center justify-between rounded-[16px] border border-[#00CC66] bg-[#161616] p-[14px] text-left shadow-[0_0_10px_rgba(0,204,102,0.1)]">
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-[14px] font-[600] text-[#FFFFFF]">
+                      <div className="truncate text-[14px] font-[700] text-[#FFFFFF]">
                         {t(`cities.${currentCity.cityKey}`).startsWith('cities.') ? currentCity.cityKey : t(`cities.${currentCity.cityKey}`)}
                       </div>
                       {!currentCity.isActive && (
-                        <div className="mt-[4px] text-[12px] font-[400] text-[#9A9A9A]">{t('home.cityInactive')}</div>
+                        <div className="mt-[4px] text-[12px] font-[500] text-[#FF4444]">{t('home.cityInactive')}</div>
                       )}
                     </div>
-                    <div className="shrink-0 text-[12px] font-[400] text-[#00CC66]">{t('home.citySelected')}</div>
+                    <div className="flex h-[24px] w-[24px] items-center justify-center rounded-full bg-[#00CC66] text-[#000000]">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 6L9 17l-5-5" />
+                      </svg>
+                    </div>
                   </div>
 
                   <button
@@ -511,24 +510,24 @@ export default function Home() {
                       setCitySearch('');
                       setIsCityPickerOpen(true);
                     }}
-                    className="w-full rounded-[12px] border border-[#222222] bg-transparent px-[14px] py-[12px] text-[13px] font-[400] text-[#FFFFFF] transition-colors hover:border-[#00CC66] hover:text-[#00CC66]"
+                    className="w-full rounded-[16px] border border-[#222222] bg-transparent px-[14px] py-[12px] text-[13px] font-[600] text-[#FFFFFF] transition-colors hover:border-[#00CC66] hover:text-[#00CC66]"
                   >
                     {t('home.chooseOtherCity')}
                   </button>
                 </div>
               ) : (
                 <>
-                  <div className="sticky top-0 mt-[12px] bg-[#111111] pb-[12px]">
+                  <div className="sticky top-0 z-10 mt-[12px] bg-[#111111] pb-[12px]">
                     <input
                       type="text"
                       value={citySearch}
                       onChange={(e) => setCitySearch(e.target.value)}
                       placeholder={t('home.searchPlaceholder')}
-                      className="w-full rounded-[12px] border border-[#222222] bg-[#1A1A1A] px-[16px] py-[14px] text-[14px] text-[#FFFFFF] outline-none placeholder:text-[#9A9A9A]"
+                      className="w-full rounded-[16px] border border-[#222222] bg-[#1A1A1A] px-[16px] py-[14px] text-[14px] text-[#FFFFFF] outline-none transition-colors placeholder:text-[#9A9A9A] focus:border-[#00CC66]"
                     />
                   </div>
 
-                  <div className="space-y-[4px] max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                  <div className="custom-scrollbar grid max-h-[300px] grid-cols-2 gap-[8px] overflow-y-auto pr-1">
                     {filteredCities.map((city) => (
                       <button
                         key={city.id}
@@ -539,20 +538,18 @@ export default function Home() {
                           setCitySearch('');
                           setIsCityPickerOpen(false);
                         }}
-                        className="flex w-full items-center gap-[12px] rounded-[12px] border border-transparent px-[12px] py-[14px] text-left transition-colors hover:bg-[#1A1A1A]"
+                        className="flex flex-col items-start justify-center rounded-[16px] border border-[#222222] bg-[#161616] p-[14px] text-left transition-all duration-150 hover:border-[#00CC66] hover:bg-[#1A1A1A]"
                       >
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-[14px] font-[600] text-[#FFFFFF]">
-                            {t(`cities.${city.cityKey}`).startsWith('cities.') ? city.cityKey : t(`cities.${city.cityKey}`)}
-                          </div>
-                          {!city.isActive && (
-                            <div className="mt-[4px] text-[12px] font-[400] text-[#9A9A9A]">{t('home.cityInactive')}</div>
-                          )}
+                        <div className="w-full truncate text-[14px] font-[700] text-[#FFFFFF]">
+                          {t(`cities.${city.cityKey}`).startsWith('cities.') ? city.cityKey : t(`cities.${city.cityKey}`)}
                         </div>
+                        {!city.isActive && (
+                          <div className="mt-[4px] text-[10px] font-[500] text-[#FF4444]">{t('home.cityInactive')}</div>
+                        )}
                       </button>
                     ))}
                     {filteredCities.length === 0 && (
-                      <div className="rounded-[12px] bg-[#1A1A1A] px-[14px] py-[14px] text-[13px] font-[400] text-[#9A9A9A]">
+                      <div className="col-span-2 rounded-[16px] bg-[#1A1A1A] p-[14px] text-center text-[13px] font-[400] text-[#9A9A9A]">
                         {t('home.noCitiesFound')}
                       </div>
                     )}
