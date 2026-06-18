@@ -130,6 +130,7 @@ export default function Checkout() {
       const createdOrder = responseData?.createdOrder;
       isSentSuccessfully = true;
 
+      // Add a slight delay to allow state to settle
       setTimeout(() => {
         WebApp.HapticFeedback.notificationOccurred('success');
         clearCheckoutPrefill();
@@ -141,7 +142,7 @@ export default function Checkout() {
             justCreated: true,
           },
         });
-      }, 300);
+      }, 500);
     } catch (e) {
       console.error('Ошибка при отправке в backend:', e);
       setSubmitError(
