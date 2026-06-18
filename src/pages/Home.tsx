@@ -1,73 +1,24 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import WebApp from '@twa-dev/sdk';
 import { useNavigate } from 'react-router-dom';
-import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useStore } from '../store';
 import { useI18n } from '../i18n';
-import { calculateCustomerMetrics, generateReferralCode, getCustomerBenefits, isOrderOwnedByUser } from '../lib/customer';
+import { isOrderOwnedByUser } from '../lib/customer';
 
 export default function Home() {
   const navigate = useNavigate();
   const { t, language } = useI18n();
-  const {
-    rates,
-    rateUpdatedAt,
-    orders,
-    profileSettings,
-    updateProfileSettings,
-  } = useStore();
-  const [isReferralCopied, setIsReferralCopied] = useState(false);
+  const { rates, rateUpdatedAt, orders } = useStore();
 
   const user = WebApp.initDataUnsafe?.user;
   const currentUserId = user?.id ? String(user.id) : null;
   const currentUserHandle = user?.username ? `@${user.username}` : (user?.first_name || t('checkout.unknownUser'));
-  const adminIds = (import.meta.env.VITE_ADMIN_IDS || '').split(',').map((id: string) => id.trim());
-  const isAdmin = user?.id ? adminIds.includes(user.id.toString()) : false;
 
-  const metrics = useMemo(
-    () => calculateCustomerMetrics(orders, currentUserHandle, currentUserId),
-    [currentUserHandle, currentUserId, orders],
-  );
-  const benefits = useMemo(
-    () => getCustomerBenefits(metrics, profileSettings.activatedReferralCode),
-    [metrics, profileSettings.activatedReferralCode],
-  );
   const currentUserOrders = useMemo(
     () => orders.filter((order) => isOrderOwnedByUser(order, currentUserHandle, currentUserId)),
     [currentUserHandle, currentUserId, orders],
   );
-  const invitedUsersCount = useMemo(
-    () =>
-      new Set(
-        orders
-          .filter(
-            (order) =>
-              order.referralCodeUsed === profileSettings.referralCode &&
-              !isOrderOwnedByUser(order, currentUserHandle, currentUserId),
-          )
-          .map((order) => order.userHandle),
-      ).size,
-    [currentUserHandle, currentUserId, orders, profileSettings.referralCode],
-  );
-  const latestActiveOrder = useMemo(
-    () => currentUserOrders.find((order) => order.status === 'accepted' || order.status === 'processing' || order.status === 'ready') ?? null,
-    [currentUserOrders],
-  );
-  const activeOrderStatusDotClass = latestActiveOrder?.status === 'ready'
-    ? 'bg-[#D4AF37]'
-    : latestActiveOrder?.status === 'processing'
-      ? 'bg-[#FFFFFF]'
-      : latestActiveOrder?.status === 'rejected'
-        ? 'bg-[#808080]'
-        : 'bg-[#D4AF37]';
-
-  useEffect(() => {
-    const expectedReferralCode = generateReferralCode(currentUserHandle);
-    if (profileSettings.referralCode !== expectedReferralCode) {
-      updateProfileSettings({ referralCode: expectedReferralCode });
-    }
-  }, [currentUserHandle, profileSettings.referralCode, updateProfileSettings]);
 
   const formattedRateUpdatedAt = new Date(rateUpdatedAt).toLocaleTimeString(language, {
     hour: '2-digit',
@@ -76,7 +27,7 @@ export default function Home() {
 
   const handleOpenExchange = () => {
     WebApp.HapticFeedback.impactOccurred('medium');
-    navigate('/');
+    navigate('/exchange');
   };
 
   const handleOpenHistory = () => {
@@ -84,156 +35,172 @@ export default function Home() {
     navigate('/orders');
   };
 
-  const handleCopyReferralCode = async () => {
-    const referralCode = profileSettings.referralCode.trim();
-    if (!referralCode) {
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(referralCode);
-      WebApp.HapticFeedback.notificationOccurred('success');
-      setIsReferralCopied(true);
-      window.setTimeout(() => setIsReferralCopied(false), 1500);
-    } catch (error) {
-      console.error('Failed to copy referral code', error);
-      WebApp.HapticFeedback.notificationOccurred('error');
-    }
+  const handleOpenSupport = () => {
+    WebApp.HapticFeedback.impactOccurred('light');
+    WebApp.openTelegramLink('https://t.me/cryptobull_manager');
   };
 
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="flex-1 px-[16px] pb-[24px]"
+      className="flex-1 flex flex-col px-[16px] pb-[24px]"
       style={{ paddingTop: 'max(16px, env(safe-area-inset-top))' }}
     >
-      <header className="mb-[16px] flex items-start justify-between gap-[12px]">
-        <div
-          className={`min-w-0 flex items-center gap-[12px] ${isAdmin ? 'cursor-pointer' : ''}`}
-          onClick={() => {
-            if (isAdmin) {
-              navigate('/admin');
-            }
-          }}
-        >
-          <div className="flex h-[40px] w-[40px] items-center justify-center rounded-[12px] bg-[#111111] border border-[#222222]">
-            <svg viewBox="0 0 24 24" fill="none" className="h-[20px] w-[20px]">
-              <path d="M12 18C15.3137 18 18 15.3137 18 12C18 8.68629 15.3137 6 12 6C8.68629 6 6 8.68629 6 12C6 15.3137 8.68629 18 12 18Z" stroke="#D4AF37" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M7.5 8L5 4" stroke="#D4AF37" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M16.5 8L19 4" stroke="#D4AF37" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M9 13H15" stroke="#D4AF37" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-          </div>
-          <div className="min-w-0">
-            <div className="truncate text-[18px] font-[800] tracking-[0.04em] text-text">CryptoBull</div>
-            <div className="mt-[3px] text-[11px] font-[400] uppercase tracking-[0.12em] text-[#9A9A9A]">{t('app.subtitle')}</div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-[8px]">
-          <LanguageSwitcher />
-          <button
-            type="button"
-            onClick={() => navigate('/profile')}
-            className="flex h-[36px] w-[36px] items-center justify-center overflow-hidden rounded-full border border-[#222222] bg-[#111111] text-[13px] font-[700] text-[#FFFFFF]"
-          >
-            {user?.photo_url ? (
-              <img src={user.photo_url} alt={t('app.avatarAlt')} className="h-full w-full object-cover" />
-            ) : (
-              user?.first_name?.charAt(0) || 'U'
-            )}
-          </button>
-        </div>
+      <header className="mb-[24px] flex items-center justify-between">
+        <button className="text-[14px] font-[500] text-[#9A9A9A]" onClick={() => WebApp.close()}>
+          Закрыть
+        </button>
+        <div className="text-[14px] font-[600] text-[#FFFFFF]">CryptoBull мини-приложение</div>
+        <button className="flex h-[32px] w-[32px] items-center justify-center rounded-full bg-[#1A1A1A]">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="1" />
+            <circle cx="12" cy="5" r="1" />
+            <circle cx="12" cy="19" r="1" />
+          </svg>
+        </button>
       </header>
 
-      <div className="space-y-[16px]">
-        <section className="rounded-[16px] border border-[#222222] bg-[#111111] px-[24px] py-[24px]">
-          <div className="flex items-center gap-[8px] text-[12px] font-[400] text-[#9A9A9A]">
-            <span className={`h-[8px] w-[8px] rounded-full ${latestActiveOrder ? activeOrderStatusDotClass : 'bg-[#222222]'}`}></span>
-            <span>{latestActiveOrder ? t(`orderStatus.${latestActiveOrder.status}`) : t('home.orderPendingManager')}</span>
+      <div className="space-y-[12px]">
+        {/* Main Commercial Block */}
+        <section className="relative overflow-hidden rounded-[20px] bg-gradient-to-br from-[#1A1A1A] to-[#0D0D0D] p-[20px]">
+          <div className="absolute right-0 top-0 h-full w-[45%] opacity-80">
+            {/* Bull graphic placeholder */}
+            <div className="absolute inset-0 bg-[url('https://coreva-normal.trae.ai/api/ide/v1/text_to_image?prompt=3d%20golden%20bull%20head%20statue%20dark%20background&image_size=square')] bg-cover bg-center bg-no-repeat mix-blend-screen" />
           </div>
-          {latestActiveOrder ? (
-            <>
-              <div className="mt-[12px] text-[18px] font-[600] text-[#FFFFFF]">{t('home.orderNumber', { id: latestActiveOrder.id })}</div>
-              <div className="mt-[8px] text-[14px] font-[400] leading-[1.7] text-[#9A9A9A]">
-                {latestActiveOrder.giveAmount} {latestActiveOrder.giveCurrency} {'->'} {latestActiveOrder.getAmount} {latestActiveOrder.getCurrency}
-              </div>
-              <div className="mt-[8px] text-[12px] font-[400] text-[#9A9A9A]">
-                {t(`cities.${latestActiveOrder.cityKey}`)} · {new Date(latestActiveOrder.createdAt).toLocaleString(language)}
-              </div>
-              <button
-                type="button"
-                onClick={handleOpenHistory}
-                className="mt-[16px] rounded-[12px] border border-[#222222] px-[14px] py-[11px] text-[12px] font-[400] text-[#FFFFFF] transition-colors hover:border-[#D4AF37] hover:text-[#D4AF37]"
-              >
-                {t('home.openOrderHistory')}
-              </button>
-            </>
-          ) : (
-            <div className="mt-[12px] text-[14px] font-[400] leading-[1.7] text-[#9A9A9A]">
-              {t('home.historyEmpty')}
+          <div className="relative z-10 w-[65%]">
+            <div className="inline-flex items-center gap-[6px] rounded-full bg-[#111111]/80 px-[8px] py-[4px] backdrop-blur-sm">
+              <div className="h-[6px] w-[6px] rounded-full bg-[#00D084]" />
+              <span className="text-[10px] font-[500] text-[#FFFFFF]">{t('home.onlineAverageTime')}</span>
             </div>
-          )}
-        </section>
-
-        <section className="rounded-[16px] border border-[#222222] bg-[#111111] px-[24px] py-[24px]">
-          <div className="flex items-start justify-between gap-[12px]">
-            <div>
-              <div className="text-[11px] font-[400] uppercase tracking-[0.12em] text-[#9A9A9A]">{t('home.rateLabel')}</div>
-              <div className="mt-[8px] text-left text-[26px] font-[600] leading-[1.1] text-[#FFFFFF]">1 EUR = {rates.EUR_USDT.toFixed(4)} USDT</div>
-              <div className="mt-[8px] text-[12px] font-[400] text-[#9A9A9A]">{t('home.rateUpdated', { time: formattedRateUpdatedAt })}</div>
+            <div className="mt-[16px] text-[12px] font-[500] uppercase tracking-wider text-[#9A9A9A]">
+              {t('home.bestRateToday')}
             </div>
-            <div className="rounded-[12px] border border-[#222222] bg-[#1A1A1A] px-[10px] py-[8px] text-[11px] font-[400] text-[#D4AF37]">
-              {t('home.executionTime')}
+            <div className="mt-[4px] text-[24px] font-[700] leading-tight text-[#FFFFFF]">
+              1 EUR = <br />{rates.EUR_USDT.toFixed(4)} USDT
             </div>
-          </div>
-
-        </section>
-
-        <section className="rounded-[16px] border border-[#222222] bg-[#111111] px-[24px] py-[24px]">
-          <div className="flex items-center justify-between gap-[12px]">
-            <div className="text-[11px] font-[400] uppercase tracking-[0.12em] text-[#9A9A9A]">{t('home.clientTermsTitle')}</div>
-            <button
-              type="button"
-              onClick={handleCopyReferralCode}
-              className="inline-flex items-center gap-[8px] rounded-[12px] border border-[#222222] bg-[#1A1A1A] px-[10px] py-[8px] text-[12px] font-[400] text-[#FFFFFF] transition-colors hover:border-[#D4AF37] hover:text-[#D4AF37]"
-            >
-              <span>{profileSettings.referralCode}</span>
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <rect x="5" y="3" width="8" height="10" rx="2" stroke="currentColor" strokeWidth="1.4" />
-                <path d="M3 11V5a2 2 0 0 1 2-2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-              </svg>
-            </button>
-          </div>
-
-          <div className="mt-[8px] text-[12px] font-[400] text-[#9A9A9A]">
-            {isReferralCopied ? t('home.referralCopied') : t('home.referralCopyHint')}
-          </div>
-
-          <div className="mt-[18px] space-y-[12px] text-[14px]">
-            <div className="flex items-center justify-between gap-[12px]">
-              <span className="font-[400] text-[#9A9A9A]">{t('home.commissionLabel')}</span>
-              <span className="text-right font-[600] text-[#FFFFFF]">{benefits.effectiveCommissionPercent.toFixed(1)}%</span>
-            </div>
-            <div className="flex items-center justify-between gap-[12px]">
-              <span className="font-[400] text-[#9A9A9A]">{t('home.discountLabel')}</span>
-              <span className="text-right font-[600] text-[#FFFFFF]">{benefits.totalDiscountPercent.toFixed(1)}%</span>
-            </div>
-            <div className="flex items-center justify-between gap-[12px]">
-              <span className="font-[400] text-[#9A9A9A]">{t('home.invitedUsersLabel')}</span>
-              <span className="text-right font-[600] text-[#FFFFFF]">{invitedUsersCount}</span>
+            <div className="mt-[8px] text-[11px] font-[400] text-[#808080]">
+              Обновлено {formattedRateUpdatedAt}
             </div>
           </div>
         </section>
 
+        {/* Call to Action */}
         <button
           type="button"
           onClick={handleOpenExchange}
-          className="w-full rounded-[12px] bg-[#D4AF37] px-[24px] py-[16px] text-[13px] font-[600] uppercase tracking-[0.08em] text-[#000000] transition-opacity hover:opacity-90"
+          className="flex w-full items-center justify-between rounded-[16px] bg-gradient-to-r from-[#D4AF37] to-[#B38F26] px-[24px] py-[18px] transition-opacity hover:opacity-90"
         >
-          {t('home.quickExchangeAction')}
+          <span className="text-[15px] font-[700] uppercase tracking-wider text-[#000000]">
+            {t('home.exchangeNow')}
+          </span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 12h14M12 5l7 7-7 7" />
+          </svg>
         </button>
+
+        {/* Efficiency Criteria */}
+        <section className="flex gap-[8px]">
+          <div className="flex flex-1 flex-col items-center justify-center rounded-[16px] bg-[#111111] p-[12px] text-center">
+            <div className="mb-[4px] text-[16px]">⭐</div>
+            <div className="text-[11px] font-[600] text-[#FFFFFF]">{t('home.ratingLabel')}</div>
+          </div>
+          <div className="flex flex-1 flex-col items-center justify-center rounded-[16px] bg-[#111111] p-[12px] text-center">
+            <div className="mb-[4px] text-[16px]">🛡️</div>
+            <div className="text-[11px] font-[600] text-[#FFFFFF]">{t('home.successfulExchanges')}</div>
+          </div>
+          <div className="flex flex-1 flex-col items-center justify-center rounded-[16px] bg-[#111111] p-[12px] text-center">
+            <div className="mb-[4px] text-[16px]">⏱️</div>
+            <div className="text-[11px] font-[600] text-[#FFFFFF]">{t('home.averageExecutionTime')}</div>
+          </div>
+        </section>
+
+        {/* Recent Exchanges */}
+        <section className="rounded-[16px] bg-[#111111] p-[20px]">
+          <div className="mb-[16px] flex items-center justify-between">
+            <h2 className="text-[12px] font-[700] uppercase tracking-wider text-[#9A9A9A]">
+              {t('home.recentExchanges')}
+            </h2>
+            <button onClick={handleOpenHistory} className="text-[12px] font-[500] text-[#D4AF37]">
+              {t('home.seeAll')}
+            </button>
+          </div>
+          <div className="space-y-[12px]">
+            {currentUserOrders.slice(0, 3).map((order) => (
+              <div key={order.id} className="flex items-center gap-[12px]">
+                <div className="h-[8px] w-[8px] rounded-full bg-[#00D084]" />
+                <div className="flex flex-1 items-center justify-between text-[14px]">
+                  <span className="font-[600] text-[#FFFFFF]">
+                    {order.giveCurrency === 'EUR' ? '€' : ''}{order.giveAmount} → {order.getCurrency}
+                  </span>
+                  <span className="text-[12px] font-[400] text-[#808080]">
+                    {new Date(order.createdAt).toLocaleTimeString(language, { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              </div>
+            ))}
+            {currentUserOrders.length === 0 && (
+              <div className="text-[13px] font-[400] text-[#808080]">
+                {t('home.historyEmpty')}
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Two-Column Block */}
+        <section className="flex gap-[8px]">
+          <div className="flex flex-1 flex-col justify-between rounded-[16px] bg-[#111111] p-[16px]">
+            <div>
+              <div className="mb-[8px] text-[20px]">🌍</div>
+              <h3 className="mb-[8px] text-[11px] font-[700] uppercase tracking-wider text-[#9A9A9A]">
+                {t('home.workingInGermany')}
+              </h3>
+              <div className="text-[13px] font-[600] leading-snug text-[#FFFFFF]">
+                Франкфурт, Берлин,<br />Мюнхен, Гамбург
+              </div>
+            </div>
+            <div className="mt-[12px] text-[11px] font-[500] text-[#808080]">
+              {t('home.andMoreCities')}
+            </div>
+          </div>
+          <div className="flex flex-1 flex-col justify-between rounded-[16px] bg-[#1A1A1A] p-[16px]">
+            <div>
+              <div className="mb-[8px] text-[20px]">👥</div>
+              <h3 className="mb-[8px] text-[11px] font-[700] uppercase tracking-wider text-[#D4AF37]">
+                {t('home.inviteFriendsTitle')}
+              </h3>
+              <div className="text-[13px] font-[600] leading-snug text-[#FFFFFF]">
+                {t('home.inviteFriendsText')}
+              </div>
+            </div>
+            <button className="mt-[12px] text-left text-[11px] font-[700] text-[#D4AF37]">
+              {t('home.learnMoreArrow')}
+            </button>
+          </div>
+        </section>
+
+        {/* Support Panel */}
+        <section className="flex items-center justify-between rounded-[16px] bg-[#111111] p-[16px]">
+          <div className="flex items-center gap-[12px]">
+            <div className="flex h-[40px] w-[40px] items-center justify-center rounded-full bg-[#1A1A1A] text-[20px]">
+              🎧
+            </div>
+            <div>
+              <div className="text-[14px] font-[600] text-[#FFFFFF]">{t('home.supportTitle')}</div>
+              <div className="text-[12px] font-[400] text-[#808080]">{t('home.supportSubtitle')}</div>
+            </div>
+          </div>
+          <button
+            onClick={handleOpenSupport}
+            className="flex items-center gap-[6px] rounded-full bg-[#1A1A1A] px-[16px] py-[8px] text-[13px] font-[500] text-[#FFFFFF] transition-colors hover:bg-[#222222]"
+          >
+            {t('home.writeMessage')}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13" />
+              <polygon points="22 2 15 22 11 13 2 9 22 2" />
+            </svg>
+          </button>
+        </section>
       </div>
     </motion.div>
   );
