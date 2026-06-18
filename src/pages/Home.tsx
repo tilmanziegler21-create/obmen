@@ -216,7 +216,10 @@ export default function Home() {
         <header className="mb-[24px] flex items-center justify-between">
           <div className="flex flex-col">
             <span className="text-[14px] font-[500] text-[#9A9A9A]">{t('home.goodAfternoon')}</span>
-            <span className="text-[20px] font-[800] text-[#FFFFFF]">{t('home.brandName')}</span>
+            <div className="flex items-center gap-[8px]">
+              <span className="text-[20px] font-[800] text-[#FFFFFF]">{t('home.brandName')}</span>
+              <img src="/logo.jpeg" alt="CryptoBull Logo" className="h-[24px] w-[24px] rounded-full object-cover shadow-[0_0_10px_rgba(0,204,102,0.2)]" />
+            </div>
           </div>
           <div className="flex items-center gap-[12px]">
             <LanguageSwitcher />
@@ -236,14 +239,11 @@ export default function Home() {
               <div className="absolute inset-0 bg-[url('https://coreva-normal.trae.ai/api/ide/v1/text_to_image?prompt=3d%20golden%20bull%20head%20statue%20dark%20background&image_size=square')] bg-cover bg-center bg-no-repeat mix-blend-screen" />
             </div>
             <div className="relative z-10 w-[65%]">
-              <div className="flex items-center gap-[12px] mb-[16px]">
-                <img src="/logo.jpeg" alt="CryptoBull Logo" className="h-[36px] w-[36px] rounded-full object-cover shadow-[0_0_15px_rgba(0,204,102,0.2)]" />
-                <div className="inline-flex items-center gap-[6px] rounded-full bg-[#111111]/80 px-[8px] py-[4px] backdrop-blur-sm">
-                  <div className="h-[6px] w-[6px] rounded-full bg-[#00CC66]" />
-                  <span className="text-[10px] font-[500] text-[#FFFFFF]">{t('home.onlineAverageTime')}</span>
-                </div>
+              <div className="inline-flex items-center gap-[6px] rounded-full bg-[#111111]/80 px-[8px] py-[4px] backdrop-blur-sm">
+                <div className="h-[6px] w-[6px] rounded-full bg-[#00CC66]" />
+                <span className="text-[10px] font-[500] text-[#FFFFFF]">{t('home.onlineAverageTime')}</span>
               </div>
-              <div className="text-[12px] font-[500] uppercase tracking-wider text-[#9A9A9A]">
+              <div className="mt-[16px] text-[12px] font-[500] uppercase tracking-wider text-[#9A9A9A]">
                 {t('home.bestRateToday')}
               </div>
               <div className="mt-[4px] text-[24px] font-[700] leading-tight text-[#FFFFFF]">

@@ -21,7 +21,7 @@ const LANGUAGE_STORAGE_KEY = 'cryptobull-language';
 const dictionaries: Record<Language, TranslationDictionary> = {
   ru: {
     app: {
-      title: 'CryptoBull',
+      title: 'Bull Change',
       subtitle: 'P2P обмен',
       live: 'LIVE',
       avatarAlt: 'Аватар',
@@ -80,7 +80,7 @@ const dictionaries: Record<Language, TranslationDictionary> = {
       referralActivated: 'Активирован код {{code}}',
       referralLocked: 'Реферальный код можно активировать только до первой сделки',
       securityCodeTitle: 'Код безопасности',
-      securityCodeHint: 'Проверяйте этот код в системных сообщениях CryptoBull, чтобы не попасться на фишинг',
+      securityCodeHint: 'Проверяйте этот код в системных сообщениях Bull Change, чтобы не попасться на фишинг',
       adminPanelAction: 'Входящие заявки: {{count}}',
       adminShortAction: 'Админка',
       myOrdersAction: 'Мои заявки',
@@ -105,7 +105,7 @@ const dictionaries: Record<Language, TranslationDictionary> = {
       repeatOrder: 'Повторить',
       cityInactive: 'В этом городе обмен временно недоступен',
       goodAfternoon: 'Добрый день',
-      brandName: 'CryptoBull',
+      brandName: 'Bull Change',
       rateNow: 'КУРС СЕЙЧАС',
       youGet: 'Получаете',
       quickExchange: 'БЫСТРЫЙ ОБМЕН',
@@ -333,7 +333,7 @@ const dictionaries: Record<Language, TranslationDictionary> = {
   },
   en: {
     app: {
-      title: 'CryptoBull',
+      title: 'Bull Change',
       subtitle: 'P2P Exchange',
       live: 'LIVE',
       avatarAlt: 'Avatar',
@@ -392,7 +392,7 @@ const dictionaries: Record<Language, TranslationDictionary> = {
       referralActivated: 'Code {{code}} activated',
       referralLocked: 'A referral code can only be activated before your first deal',
       securityCodeTitle: 'Security code',
-      securityCodeHint: 'Make sure this code matches official CryptoBull messages to avoid phishing',
+      securityCodeHint: 'Make sure this code matches official Bull Change messages to avoid phishing',
       adminPanelAction: 'Incoming orders: {{count}}',
       adminShortAction: 'Admin',
       myOrdersAction: 'My orders',
@@ -417,7 +417,7 @@ const dictionaries: Record<Language, TranslationDictionary> = {
       repeatOrder: 'Repeat',
       cityInactive: 'Exchange is temporarily unavailable in this city',
       goodAfternoon: 'Good afternoon',
-      brandName: 'CryptoBull',
+      brandName: 'Bull Change',
       rateNow: 'CURRENT RATE',
       youGet: 'You get',
       quickExchange: 'QUICK EXCHANGE',
@@ -645,7 +645,7 @@ const dictionaries: Record<Language, TranslationDictionary> = {
   },
   uk: {
     app: {
-      title: 'CryptoBull',
+      title: 'Bull Change',
       subtitle: 'P2P Exchange',
       live: 'LIVE',
       avatarAlt: 'Аватар',
@@ -704,7 +704,7 @@ const dictionaries: Record<Language, TranslationDictionary> = {
       referralActivated: 'Активовано код {{code}}',
       referralLocked: 'Реферальний код можна активувати лише до першої угоди',
       securityCodeTitle: 'Код безпеки',
-      securityCodeHint: 'Перевіряйте цей код у системних повідомленнях CryptoBull, щоб уникнути фішингу',
+      securityCodeHint: 'Перевіряйте цей код у системних повідомленнях Bull Change, щоб уникнути фішингу',
       adminPanelAction: 'Вхідні заявки: {{count}}',
       adminShortAction: 'Адмінка',
       myOrdersAction: 'Мої заявки',
@@ -729,7 +729,7 @@ const dictionaries: Record<Language, TranslationDictionary> = {
       repeatOrder: 'Повторити',
       cityInactive: 'У цьому місті обмін тимчасово недоступний',
       goodAfternoon: 'Добрий день',
-      brandName: 'CryptoBull',
+      brandName: 'Bull Change',
       rateNow: 'КУРС ЗАРАЗ',
       youGet: 'Отримуєте',
       quickExchange: 'ШВИДКИЙ ОБМІН',
@@ -957,7 +957,7 @@ const dictionaries: Record<Language, TranslationDictionary> = {
   },
   de: {
     app: {
-      title: 'CryptoBull',
+      title: 'Bull Change',
       subtitle: 'P2P Exchange',
       live: 'LIVE',
       avatarAlt: 'Avatar',
@@ -1016,7 +1016,7 @@ const dictionaries: Record<Language, TranslationDictionary> = {
       referralActivated: 'Code {{code}} aktiviert',
       referralLocked: 'Ein Referral-Code kann nur vor dem ersten Tausch aktiviert werden',
       securityCodeTitle: 'Sicherheitscode',
-      securityCodeHint: 'Prufen Sie diesen Code in offiziellen CryptoBull-Nachrichten, um Phishing zu vermeiden',
+      securityCodeHint: 'Prufen Sie diesen Code in offiziellen Bull Change-Nachrichten, um Phishing zu vermeiden',
       adminPanelAction: 'Eingehende Anfragen: {{count}}',
       adminShortAction: 'Admin',
       myOrdersAction: 'Meine Anfragen',
@@ -1041,7 +1041,7 @@ const dictionaries: Record<Language, TranslationDictionary> = {
       repeatOrder: 'Wiederholen',
       cityInactive: 'Der Tausch ist in dieser Stadt voruebergehend nicht verfuegbar',
       goodAfternoon: 'Guten Tag',
-      brandName: 'CryptoBull',
+      brandName: 'Bull Change',
       rateNow: 'AKTUELLER KURS',
       youGet: 'Sie erhalten',
       quickExchange: 'SCHNELLER TAUSCH',
