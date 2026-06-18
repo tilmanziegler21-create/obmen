@@ -1,44 +1,86 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import WebApp from '@twa-dev/sdk';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { useI18n } from '../i18n';
 import { isOrderOwnedByUser } from '../lib/customer';
+import { getAssetLabel, getAssetCurrency } from '../lib/exchangeAssets';
+import { getAssetConversionRate } from '../lib/rates';
 
 export default function Home() {
   const navigate = useNavigate();
   const { t, language } = useI18n();
-  const { rates, rateUpdatedAt, orders } = useStore();
+  const { 
+    rates, 
+    orders, 
+    usdtReserve,
+    cities,
+    profileSettings,
+    selectedGiveAsset,
+    selectedGetAsset,
+    giveAmount,
+    getAmount,
+    setGiveAmount,
+    setGiveAsset,
+    setGetAsset,
+    clearCheckoutPrefill
+  } = useStore();
 
   const user = WebApp.initDataUnsafe?.user;
   const currentUserId = user?.id ? String(user.id) : null;
   const currentUserHandle = user?.username ? `@${user.username}` : (user?.first_name || t('checkout.unknownUser'));
+  
+  const [isReferralCopied, setIsReferralCopied] = useState(false);
+  const amountInputRef = useRef<HTMLInputElement>(null);
 
   const currentUserOrders = useMemo(
     () => orders.filter((order) => isOrderOwnedByUser(order, currentUserHandle, currentUserId)),
     [currentUserHandle, currentUserId, orders],
   );
 
-  const formattedRateUpdatedAt = new Date(rateUpdatedAt).toLocaleTimeString(language, {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const latestActiveOrder = useMemo(
+    () => currentUserOrders.find((order) => order.status === 'accepted' || order.status === 'processing' || order.status === 'ready') ?? null,
+    [currentUserOrders],
+  );
 
   const handleOpenExchange = () => {
     WebApp.HapticFeedback.impactOccurred('medium');
-    navigate('/exchange');
+    clearCheckoutPrefill();
+    navigate('/checkout');
   };
 
-  const handleOpenHistory = () => {
+  const handleOpenProfile = () => {
     WebApp.HapticFeedback.impactOccurred('light');
-    navigate('/orders');
+    navigate('/profile');
   };
 
-  const handleOpenSupport = () => {
-    WebApp.HapticFeedback.impactOccurred('light');
-    WebApp.openTelegramLink('https://t.me/cryptobull_manager');
+  const handleCopyReferralCode = async () => {
+    const referralCode = profileSettings.referralCode.trim();
+    if (!referralCode) return;
+
+    try {
+      await navigator.clipboard.writeText(referralCode);
+      WebApp.HapticFeedback.notificationOccurred('success');
+      setIsReferralCopied(true);
+      window.setTimeout(() => setIsReferralCopied(false), 1500);
+    } catch (error) {
+      console.error('Failed to copy referral code', error);
+      WebApp.HapticFeedback.notificationOccurred('error');
+    }
   };
+
+  const handleSwapDirection = () => {
+    WebApp.HapticFeedback.impactOccurred('medium');
+    const nextGiveAmount = getAmount || '';
+    setGiveAsset(selectedGetAsset);
+    setGetAsset(selectedGiveAsset);
+    setGiveAmount(nextGiveAmount);
+  };
+
+  const currentRate = getAssetConversionRate(selectedGiveAsset, selectedGetAsset, rates);
+  const totalEurReserve = useMemo(() => cities.reduce((sum, city) => sum + city.limitEUR, 0), [cities]);
+  const formattedEurReserve = totalEurReserve >= 3000 ? '3000' : totalEurReserve.toString();
 
   return (
     <motion.div
@@ -47,157 +89,149 @@ export default function Home() {
       className="flex-1 flex flex-col px-[16px] pb-[24px]"
       style={{ paddingTop: 'max(16px, env(safe-area-inset-top))' }}
     >
-      <header className="mb-[24px] flex items-center justify-between">
-        <button className="text-[14px] font-[500] text-[#9A9A9A]" onClick={() => WebApp.close()}>
-          Закрыть
-        </button>
-        <div className="text-[14px] font-[600] text-[#FFFFFF]">CryptoBull мини-приложение</div>
-        <button className="flex h-[32px] w-[32px] items-center justify-center rounded-full bg-[#1A1A1A]">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="1" />
-            <circle cx="12" cy="5" r="1" />
-            <circle cx="12" cy="19" r="1" />
-          </svg>
+      {/* 1. Верхняя область приветствия и авторизации */}
+      <header className="mb-[24px] flex items-start justify-between">
+        <div className="flex flex-col">
+          <span className="text-[14px] font-[500] text-[#9A9A9A]">{t('home.goodAfternoon')}</span>
+          <span className="text-[20px] font-[800] text-[#FFFFFF]">{t('home.brandName')}</span>
+        </div>
+        <button 
+          onClick={handleOpenProfile}
+          className="flex h-[40px] w-[40px] items-center justify-center rounded-full bg-gradient-to-br from-[#D4AF37] to-[#B38F26] text-[18px] font-[700] text-[#000000] shadow-[0_0_15px_rgba(212,175,55,0.3)]"
+        >
+          {user?.first_name ? user.first_name.charAt(0).toUpperCase() : 'K'}
         </button>
       </header>
 
-      <div className="space-y-[12px]">
-        {/* Main Commercial Block */}
-        <section className="relative overflow-hidden rounded-[20px] bg-gradient-to-br from-[#1A1A1A] to-[#0D0D0D] p-[20px]">
-          <div className="absolute right-0 top-0 h-full w-[45%] opacity-80">
-            {/* Bull graphic placeholder */}
-            <div className="absolute inset-0 bg-[url('https://coreva-normal.trae.ai/api/ide/v1/text_to_image?prompt=3d%20golden%20bull%20head%20statue%20dark%20background&image_size=square')] bg-cover bg-center bg-no-repeat mix-blend-screen" />
-          </div>
-          <div className="relative z-10 w-[65%]">
-            <div className="inline-flex items-center gap-[6px] rounded-full bg-[#111111]/80 px-[8px] py-[4px] backdrop-blur-sm">
+      <div className="space-y-[12px] flex-1 flex flex-col">
+        {/* 2. Центральный модуль калькулятора и мониторинга */}
+        <section className="rounded-[24px] bg-[#111111] p-[20px] shadow-lg">
+          {/* Информационная строка курса */}
+          <div className="mb-[16px] flex items-center justify-between">
+            <span className="text-[12px] font-[600] uppercase tracking-wider text-[#9A9A9A]">{t('home.rateNow')}</span>
+            <div className="flex items-center gap-[6px]">
               <div className="h-[6px] w-[6px] rounded-full bg-[#00D084]" />
-              <span className="text-[10px] font-[500] text-[#FFFFFF]">{t('home.onlineAverageTime')}</span>
-            </div>
-            <div className="mt-[16px] text-[12px] font-[500] uppercase tracking-wider text-[#9A9A9A]">
-              {t('home.bestRateToday')}
-            </div>
-            <div className="mt-[4px] text-[24px] font-[700] leading-tight text-[#FFFFFF]">
-              1 EUR = <br />{rates.EUR_USDT.toFixed(4)} USDT
-            </div>
-            <div className="mt-[8px] text-[11px] font-[400] text-[#808080]">
-              Обновлено {formattedRateUpdatedAt}
+              <span className="text-[13px] font-[600] text-[#FFFFFF]">
+                1 {getAssetLabel(selectedGiveAsset, language)} = {currentRate.toFixed(4)} {getAssetCurrency(selectedGetAsset)}
+              </span>
             </div>
           </div>
+
+          {/* Поле ввода (Отдаёте) */}
+          <div className="relative rounded-[16px] bg-[#1A1A1A] p-[16px]">
+            <div className="mb-[4px] text-[12px] font-[500] text-[#9A9A9A]">{t('home.youGive')}</div>
+            <div className="flex items-center justify-between">
+              <input
+                ref={amountInputRef}
+                type="number"
+                value={giveAmount}
+                onChange={(e) => setGiveAmount(e.target.value)}
+                placeholder="0"
+                min="0"
+                step={selectedGiveAsset === 'EUR_CASH' ? '10' : '0.01'}
+                inputMode="decimal"
+                className="w-full bg-transparent text-[32px] font-[700] text-[#FFFFFF] outline-none placeholder:text-[#333333]"
+              />
+              <div className="flex shrink-0 items-center gap-[6px] rounded-[12px] bg-[#222222] px-[12px] py-[8px]">
+                <span className="text-[16px]">{selectedGiveAsset === 'EUR_CASH' ? '🇪🇺' : selectedGiveAsset === 'UAH_CARD' ? '🇺🇦' : '₮'}</span>
+                <span className="text-[14px] font-[600] text-[#FFFFFF]">{getAssetCurrency(selectedGiveAsset)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Указатель направления */}
+          <div className="relative z-10 -my-[12px] flex justify-center">
+            <button 
+              onClick={handleSwapDirection}
+              className="flex h-[36px] w-[36px] items-center justify-center rounded-full border-4 border-[#111111] bg-gradient-to-b from-[#D4AF37] to-[#B38F26] text-[#000000] shadow-md transition-transform hover:scale-105 active:scale-95"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 5v14M19 12l-7 7-7-7" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Поле вывода (Получаете) */}
+          <div className="relative rounded-[16px] bg-[#1A1A1A] p-[16px]">
+            <div className="mb-[4px] text-[12px] font-[500] text-[#9A9A9A]">{t('home.youGet')}</div>
+            <div className="flex items-center justify-between">
+              <div className={`truncate text-[32px] font-[700] ${getAmount ? 'text-[#FFFFFF]' : 'text-[#333333]'}`}>
+                {getAmount || '0'}
+              </div>
+              <div className="flex shrink-0 items-center gap-[6px] rounded-[12px] bg-[#222222] px-[12px] py-[8px]">
+                <span className="text-[16px]">{selectedGetAsset === 'EUR_CASH' ? '🇪🇺' : selectedGetAsset === 'UAH_CARD' ? '🇺🇦' : '₮'}</span>
+                <span className="text-[14px] font-[600] text-[#FFFFFF]">{getAssetCurrency(selectedGetAsset)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Строка статуса (если есть активная заявка) */}
+          {latestActiveOrder && (
+            <div className="mt-[16px] flex items-center justify-between rounded-[12px] bg-[#1A1A1A]/50 px-[16px] py-[12px] border border-[#222222]">
+              <div className="flex items-center gap-[8px]">
+                <div className="h-[8px] w-[8px] rounded-full bg-[#D4AF37]" />
+                <span className="text-[13px] font-[500] text-[#FFFFFF]">
+                  {t('home.orderProcessing', { id: latestActiveOrder.id })}
+                </span>
+              </div>
+              <button onClick={() => navigate('/orders')} className="text-[#9A9A9A]">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 18l6-6-6-6" />
+                </svg>
+              </button>
+            </div>
+          )}
         </section>
 
-        {/* Call to Action */}
+        {/* 3. Главный орган управления */}
         <button
           type="button"
           onClick={handleOpenExchange}
-          className="flex w-full items-center justify-between rounded-[16px] bg-gradient-to-r from-[#D4AF37] to-[#B38F26] px-[24px] py-[18px] transition-opacity hover:opacity-90"
+          disabled={!giveAmount || Number(giveAmount) <= 0}
+          className="w-full rounded-[16px] bg-gradient-to-r from-[#D4AF37] to-[#B38F26] px-[24px] py-[18px] text-[16px] font-[700] uppercase tracking-wider text-[#000000] shadow-[0_4px_14px_rgba(212,175,55,0.25)] transition-opacity disabled:opacity-50 disabled:shadow-none"
         >
-          <span className="text-[15px] font-[700] uppercase tracking-wider text-[#000000]">
-            {t('home.exchangeNow')}
-          </span>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M5 12h14M12 5l7 7-7 7" />
-          </svg>
+          {t('home.quickExchange')}
         </button>
 
-        {/* Efficiency Criteria */}
-        <section className="flex gap-[8px]">
-          <div className="flex flex-1 flex-col items-center justify-center rounded-[16px] bg-[#111111] p-[12px] text-center">
-            <div className="mb-[4px] text-[16px]">⭐</div>
-            <div className="text-[11px] font-[600] text-[#FFFFFF]">{t('home.ratingLabel')}</div>
-          </div>
-          <div className="flex flex-1 flex-col items-center justify-center rounded-[16px] bg-[#111111] p-[12px] text-center">
-            <div className="mb-[4px] text-[16px]">🛡️</div>
-            <div className="text-[11px] font-[600] text-[#FFFFFF]">{t('home.successfulExchanges')}</div>
-          </div>
-          <div className="flex flex-1 flex-col items-center justify-center rounded-[16px] bg-[#111111] p-[12px] text-center">
-            <div className="mb-[4px] text-[16px]">⏱️</div>
-            <div className="text-[11px] font-[600] text-[#FFFFFF]">{t('home.averageExecutionTime')}</div>
-          </div>
-        </section>
-
-        {/* Recent Exchanges */}
-        <section className="rounded-[16px] bg-[#111111] p-[20px]">
-          <div className="mb-[16px] flex items-center justify-between">
-            <h2 className="text-[12px] font-[700] uppercase tracking-wider text-[#9A9A9A]">
-              {t('home.recentExchanges')}
-            </h2>
-            <button onClick={handleOpenHistory} className="text-[12px] font-[500] text-[#D4AF37]">
-              {t('home.seeAll')}
-            </button>
-          </div>
-          <div className="space-y-[12px]">
-            {currentUserOrders.slice(0, 3).map((order) => (
-              <div key={order.id} className="flex items-center gap-[12px]">
-                <div className="h-[8px] w-[8px] rounded-full bg-[#00D084]" />
-                <div className="flex flex-1 items-center justify-between text-[14px]">
-                  <span className="font-[600] text-[#FFFFFF]">
-                    {order.giveCurrency === 'EUR' ? '€' : ''}{order.giveAmount} → {order.getCurrency}
-                  </span>
-                  <span className="text-[12px] font-[400] text-[#808080]">
-                    {new Date(order.createdAt).toLocaleTimeString(language, { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </div>
-              </div>
-            ))}
-            {currentUserOrders.length === 0 && (
-              <div className="text-[13px] font-[400] text-[#808080]">
-                {t('home.historyEmpty')}
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* Two-Column Block */}
-        <section className="flex gap-[8px]">
-          <div className="flex flex-1 flex-col justify-between rounded-[16px] bg-[#111111] p-[16px]">
-            <div>
-              <div className="mb-[8px] text-[20px]">🌍</div>
-              <h3 className="mb-[8px] text-[11px] font-[700] uppercase tracking-wider text-[#9A9A9A]">
-                {t('home.workingInGermany')}
-              </h3>
-              <div className="text-[13px] font-[600] leading-snug text-[#FFFFFF]">
-                Франкфурт, Берлин,<br />Мюнхен, Гамбург
-              </div>
+        {/* 4. Информационные карточки остатков */}
+        <div className="flex gap-[8px]">
+          <div className="flex flex-1 flex-col justify-center rounded-[16px] bg-[#111111] p-[16px]">
+            <div className="flex items-center gap-[6px] mb-[8px]">
+              <div className="h-[6px] w-[6px] rounded-full bg-[#00D084]" />
+              <span className="text-[14px] font-[600] text-[#FFFFFF]">USDT</span>
             </div>
-            <div className="mt-[12px] text-[11px] font-[500] text-[#808080]">
-              {t('home.andMoreCities')}
-            </div>
+            <div className="text-[13px] font-[500] text-[#9A9A9A]">{t('home.available')}</div>
           </div>
-          <div className="flex flex-1 flex-col justify-between rounded-[16px] bg-[#1A1A1A] p-[16px]">
-            <div>
-              <div className="mb-[8px] text-[20px]">👥</div>
-              <h3 className="mb-[8px] text-[11px] font-[700] uppercase tracking-wider text-[#D4AF37]">
-                {t('home.inviteFriendsTitle')}
-              </h3>
-              <div className="text-[13px] font-[600] leading-snug text-[#FFFFFF]">
-                {t('home.inviteFriendsText')}
-              </div>
+          <div className="flex flex-1 flex-col justify-center rounded-[16px] bg-[#111111] p-[16px]">
+            <div className="flex items-center gap-[6px] mb-[8px]">
+              <div className="h-[6px] w-[6px] rounded-full bg-[#00D084]" />
+              <span className="text-[14px] font-[600] text-[#FFFFFF]">EUR наличные</span>
             </div>
-            <button className="mt-[12px] text-left text-[11px] font-[700] text-[#D4AF37]">
-              {t('home.learnMoreArrow')}
-            </button>
+            <div className="text-[13px] font-[500] text-[#9A9A9A]">{t('home.availableUpTo')}</div>
           </div>
-        </section>
+        </div>
 
-        {/* Support Panel */}
+        <div className="flex-1" /> {/* Spacer */}
+
+        {/* 5. Модуль приглашения (Реферальная система) */}
         <section className="flex items-center justify-between rounded-[16px] bg-[#111111] p-[16px]">
-          <div className="flex items-center gap-[12px]">
-            <div className="flex h-[40px] w-[40px] items-center justify-center rounded-full bg-[#1A1A1A] text-[20px]">
-              🎧
-            </div>
-            <div>
-              <div className="text-[14px] font-[600] text-[#FFFFFF]">{t('home.supportTitle')}</div>
-              <div className="text-[12px] font-[400] text-[#808080]">{t('home.supportSubtitle')}</div>
-            </div>
-          </div>
-          <button
-            onClick={handleOpenSupport}
-            className="flex items-center gap-[6px] rounded-full bg-[#1A1A1A] px-[16px] py-[8px] text-[13px] font-[500] text-[#FFFFFF] transition-colors hover:bg-[#222222]"
+          <span className="text-[14px] font-[500] text-[#9A9A9A]">{t('home.yourCode')}</span>
+          <button 
+            onClick={handleCopyReferralCode}
+            className="flex items-center gap-[8px] rounded-[8px] bg-[#1A1A1A] px-[12px] py-[8px] transition-colors hover:bg-[#222222]"
           >
-            {t('home.writeMessage')}
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="22" y1="2" x2="11" y2="13" />
-              <polygon points="22 2 15 22 11 13 2 9 22 2" />
+            <span className="font-mono text-[14px] font-[700] tracking-wider text-[#D4AF37]">
+              {profileSettings.referralCode}
+            </span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={isReferralCopied ? "#00D084" : "#D4AF37"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {isReferralCopied ? (
+                <path d="M20 6L9 17l-5-5" />
+              ) : (
+                <>
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </>
+              )}
             </svg>
           </button>
         </section>
