@@ -110,13 +110,12 @@ export default function Home() {
   const currentCity = cities.find((city) => city.id === selectedCityId) ?? null;
   const eurCashAmount = selectedGiveAsset === 'EUR_CASH' ? Number(giveAmount) : selectedGetAsset === 'EUR_CASH' ? Number(getAmount) : 0;
   const usdtAmount = selectedGetAsset === 'USDT' ? Number(getAmount) : selectedGiveAsset === 'USDT' ? Number(giveAmount) : 0;
-  const isOverLimit = eurCashAmount > 500;
+  const isOverLimit = false; // Limits removed per user request
   const isCityMissing = !currentCity;
   const isCityInactive = currentCity ? !currentCity.isActive : false;
-  const isCashReserveInsufficient = selectedGetAsset === 'EUR_CASH' ? (currentCity ? eurCashAmount > currentCity.limitEUR : false) : false;
   const isUsdtReserveInsufficient = selectedGetAsset === 'USDT' ? usdtAmount > usdtReserve : false;
   const isEurInvalid = selectedGiveAsset === 'EUR_CASH' && (Number(giveAmount) % 10 !== 0 || Number(giveAmount) % 1 !== 0);
-  const isReserveBlocked = isCityMissing || isCityInactive || isCashReserveInsufficient || isUsdtReserveInsufficient;
+  const isReserveBlocked = isCityMissing || isCityInactive || isUsdtReserveInsufficient;
   const isValid = Number(giveAmount) > 0 && !isOverLimit && !isReserveBlocked && (!isEurInvalid || Number(giveAmount) === 0);
   
   const reserveMessage =
@@ -126,9 +125,7 @@ export default function Home() {
         ? t('home.cityInactive')
         : isUsdtReserveInsufficient
           ? t('home.usdtReserveError')
-          : isCashReserveInsufficient
-            ? t('home.cityCashReserveError')
-            : null;
+          : null;
 
   const handleOpenProfile = () => {
     WebApp.HapticFeedback.impactOccurred('light');

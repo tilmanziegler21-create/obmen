@@ -44,12 +44,10 @@ export default function Checkout() {
   const requiresWallet = selectedGetAsset === 'USDT';
   const requiresContact = selectedGetAsset === 'EUR_CASH';
   const requiresCardNumber = selectedGiveAsset === 'UAH_CARD' || selectedGetAsset === 'UAH_CARD';
-  const requiredCashReserve = selectedGetAsset === 'EUR_CASH' ? Number(getAmount) : 0;
   const requiredUsdtReserve = selectedGetAsset === 'USDT' ? Number(getAmount) : 0;
   const isReserveBlocked =
     !city ||
     !city.isActive ||
-    (selectedGetAsset === 'EUR_CASH' && requiredCashReserve > city.limitEUR) ||
     (selectedGetAsset === 'USDT' && requiredUsdtReserve > usdtReserve);
   const metrics = useMemo(
     () => calculateCustomerMetrics(orders, userHandle, currentUserId),
