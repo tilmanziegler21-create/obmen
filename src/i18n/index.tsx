@@ -143,7 +143,7 @@ const dictionaries: Record<Language, TranslationDictionary> = {
       averageExecutionTime: '5-30 мин Среднее время',
       recentExchanges: 'ПОСЛЕДНИЕ ОБМЕНЫ',
       seeAll: 'Смотреть все ->',
-      workingWorldwide: 'РАБОТАЕМ ПО ВСЕМУ МИРУ',
+      workingWorldwide: 'РАБОТАЕМ ВО ВСЕМ МИРЕ',
       globalCitiesList: 'Разные страны и города',
       andMoreCities: 'и ещё 13 городов',
       inviteFriendsTitle: 'ПРИГЛАШАЙ ДРУЗЕЙ',
