@@ -214,9 +214,12 @@ export default function Home() {
       >
         {/* ВЕРХНИЙ БЛОК: Приветствие и Авторизация */}
         <header className="mb-[24px] flex items-center justify-between">
-          <div className="flex flex-col">
-            <span className="text-[14px] font-[500] text-[#9A9A9A]">{t('home.goodAfternoon')}</span>
-            <span className="text-[20px] font-[800] text-[#FFFFFF]">{t('home.brandName')}</span>
+          <div className="flex items-center gap-[12px]">
+            <img src="/logo.jpeg" alt="Logo" className="h-[40px] w-[40px] rounded-full object-cover shadow-[0_0_15px_rgba(0,204,102,0.2)]" />
+            <div className="flex flex-col">
+              <span className="text-[14px] font-[500] text-[#9A9A9A]">{t('home.goodAfternoon')}</span>
+              <span className="text-[20px] font-[800] text-[#FFFFFF]">{t('home.brandName')}</span>
+            </div>
           </div>
           <div className="flex items-center gap-[12px]">
             <LanguageSwitcher />
@@ -388,8 +391,11 @@ export default function Home() {
 
           {/* НИЖНИЙ БЛОК: Калькулятор обмена */}
           <div ref={calculatorRef} className="pt-[16px]">
-            <section className="rounded-[24px] bg-[#111111] p-[20px] shadow-lg">
-              <div className="mb-[16px] flex items-center justify-between">
+            <section className="premium-animated-calculator relative overflow-hidden rounded-[24px] border border-[#222222] p-[20px] shadow-lg">
+              {/* Декоративный внутренний блик */}
+              <div className="pointer-events-none absolute -right-24 -top-24 h-48 w-48 bg-[#00CC66] opacity-[0.03] blur-3xl" />
+
+              <div className="relative z-10 mb-[16px] flex items-center justify-between">
                 <span className="text-[12px] font-[600] uppercase tracking-wider text-[#9A9A9A]">{t('home.rateNow')}</span>
                 <div className="flex items-center gap-[6px]">
                   <div className="h-[6px] w-[6px] rounded-full bg-[#00CC66]" />
@@ -400,7 +406,7 @@ export default function Home() {
               </div>
 
               {/* Поле ввода (Отдаёте) */}
-              <div className="relative rounded-[16px] bg-[#1A1A1A] p-[16px]">
+              <div className="glass-input-field relative z-10 rounded-[16px] p-[16px] transition-all duration-300 focus-within:border-[#00CC66]/50">
                 <div className="mb-[4px] text-[12px] font-[500] text-[#9A9A9A]">{t('home.youGive')}</div>
                 <div className="flex items-center justify-between gap-[12px]">
                   <input
@@ -432,10 +438,10 @@ export default function Home() {
               </div>
 
               {/* Указатель направления */}
-              <div className="relative z-10 -my-[12px] flex justify-center">
+              <div className="relative z-20 -my-[12px] flex justify-center">
                 <button 
                   onClick={handleSwapDirection}
-                  className="flex h-[36px] w-[36px] items-center justify-center rounded-full border-4 border-[#111111] bg-[#222222] text-[#00CC66] transition-transform hover:scale-105 active:scale-95"
+                  className="flex h-[36px] w-[36px] items-center justify-center rounded-full border-4 border-[#111111] bg-[#222222] text-[#00CC66] transition-transform duration-300 hover:scale-110 active:scale-95 shadow-lg shadow-[#00CC66]/30"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M12 5v14M19 12l-7 7-7-7" />
@@ -444,7 +450,7 @@ export default function Home() {
               </div>
 
               {/* Поле вывода (Получаете) */}
-              <div className="relative rounded-[16px] bg-[#1A1A1A] p-[16px]">
+              <div className="glass-input-field relative z-10 rounded-[16px] p-[16px]">
                 <div className="mb-[4px] text-[12px] font-[500] text-[#9A9A9A]">{t('home.youGet')}</div>
                 <div className="flex items-center justify-between gap-[12px]">
                   <div className={`truncate min-w-0 flex-1 text-[32px] font-[700] ${getAmount ? 'text-[#FFFFFF]' : 'text-[#333333]'}`}>
@@ -461,17 +467,17 @@ export default function Home() {
                 </div>
               </div>
               
-              <div className="mt-[16px] flex items-center justify-between border-t border-[#222222] pt-[16px] text-[13px]">
+              <div className="relative z-10 mt-[16px] flex items-center justify-between border-t border-[#222222] pt-[16px] text-[13px]">
                 <div className="flex items-center gap-[8px] text-[#9A9A9A]">
                   <span className="inline-flex h-[20px] w-[20px] items-center justify-center rounded-full border border-[#222222] bg-[#1A1A1A] text-[#00CC66]">
                     <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
                       <path d="M3 8.2l3 3L13 4.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </span>
-                  <span>{t('home.commissionIncluded')}</span>
+                  <span className="opacity-80">{t('home.commissionIncluded')}</span>
                 </div>
                 <div className="flex items-center gap-[10px]">
-                  <div className="text-right font-[600] text-[#FFFFFF]">{benefits.effectiveCommissionPercent.toFixed(1)}%</div>
+                  <div className="rounded border border-[#00CC66]/20 bg-[#00CC66]/10 px-2 py-0.5 text-right font-[700] tracking-wide text-[#00CC66]">{benefits.effectiveCommissionPercent.toFixed(1)}%</div>
                 </div>
               </div>
             </section>

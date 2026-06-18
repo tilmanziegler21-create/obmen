@@ -45,3 +45,32 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Анимация плавного смещения градиентного фона */ 
+@keyframes aurora-bg { 
+  0% { background-position: 0% 50%; } 
+  50% { background-position: 100% 50%; } 
+  100% { background-position: 0% 50%; } 
+} 
+
+/* Анимация пульсации внешнего контурного свечения */ 
+@keyframes border-glow { 
+  0%, 100% { border-color: rgba(0, 204, 102, 0.2); box-shadow: 0 0 15px rgba(0, 204, 102, 0.05); } 
+  50% { border-color: rgba(0, 204, 102, 0.5); box-shadow: 0 0 25px rgba(0, 204, 102, 0.15); } 
+} 
+
+/* Класс для анимированного контейнера калькулятора */ 
+.premium-animated-calculator { 
+  background: linear-gradient(135deg, #111111, #051a10, #111111, #0a2416); 
+  background-size: 300% 300%; 
+  animation: aurora-bg 12s ease infinite, border-glow 6s ease-in-out infinite; 
+  will-change: background-position, border-color, box-shadow; 
+} 
+
+/* Эффект размытия заднего плана для полей ввода внутри калькулятора */ 
+.glass-input-field { 
+  background: rgba(26, 26, 26, 0.6); 
+  backdrop-filter: blur(10px); 
+  -webkit-backdrop-filter: blur(10px); 
+  border: 1px solid rgba(255, 255, 255, 0.03); 
+}
