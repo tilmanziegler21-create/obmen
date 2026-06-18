@@ -13,16 +13,6 @@ const ITEMS = [
     ),
   },
   {
-    path: '/exchange',
-    key: 'exchange',
-    icon: (
-      <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-        <path d="M5 6h10M5 6l2.5-2.5M5 6l2.5 2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M15 14H5M15 14l-2.5-2.5M15 14l-2.5 2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    ),
-  },
-  {
     path: '/orders',
     key: 'history',
     icon: (
@@ -53,7 +43,7 @@ export default function BottomNav() {
       className="fixed bottom-0 left-1/2 z-30 w-full max-w-[420px] -translate-x-1/2 border-t border-[#222222] bg-[rgba(0,0,0,0.9)] px-[8px] pt-[8px] backdrop-blur-xl"
       style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}
     >
-      <div className="grid grid-cols-4 gap-[6px]">
+      <div className="grid grid-cols-3 gap-[6px]">
         {ITEMS.map((item) => {
           const isActive = location.pathname === item.path;
 
@@ -63,13 +53,17 @@ export default function BottomNav() {
               type="button"
               onClick={() => {
                 WebApp.HapticFeedback.selectionChanged();
-                navigate(item.path);
+                if (item.path === '/' && isActive) {
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                } else {
+                  navigate(item.path);
+                }
               }}
               className={`flex flex-col items-center justify-center gap-[4px] rounded-[12px] px-[8px] py-[10px] text-[9px] font-[400] leading-none transition-colors ${
-                isActive ? 'text-[#D4AF37]' : 'text-[#808080]'
+                isActive ? 'text-[#00CC66]' : 'text-[#808080]'
               }`}
             >
-              <span className={`flex h-[20px] w-[20px] items-center justify-center ${isActive ? 'text-[#D4AF37]' : 'text-[#808080]'}`}>
+              <span className={`flex h-[20px] w-[20px] items-center justify-center ${isActive ? 'text-[#00CC66]' : 'text-[#808080]'}`}>
                 {item.icon}
               </span>
               <span>{t(`nav.${item.key}`)}</span>

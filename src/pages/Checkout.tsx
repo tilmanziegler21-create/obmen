@@ -334,7 +334,7 @@ export default function Checkout() {
           onClick={handleSubmit}
           disabled={!isValid || isSubmitting || isReserveBlocked}
           className={`w-full p-[18px] border-none rounded-r2 font-sans text-[15px] font-[700] cursor-pointer transition-all tracking-[0.02em] flex items-center justify-center gap-[8px] relative overflow-hidden active:scale-[0.985] disabled:opacity-35 disabled:cursor-not-allowed disabled:transform-none ${
-            isValid ? 'bg-[#D4AF37] text-[#000000]' : 'bg-bg3 text-muted'
+            isValid ? 'bg-[#00CC66] text-[#000000]' : 'bg-bg3 text-muted'
           }`}
         >
           {isSubmitting ? (

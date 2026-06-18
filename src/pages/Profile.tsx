@@ -129,7 +129,7 @@ export default function Profile() {
             {showProfileName && <div className="text-[14px] font-[400] text-[#9A9A9A]">{effectiveName}</div>}
             <div className="mt-[6px] break-all text-[24px] font-[600] leading-[1.2] text-[#FFFFFF]">{currentUserHandle}</div>
             {isAdmin && (
-              <div className="mt-[10px] inline-flex items-center rounded-[12px] bg-[#1A1A1A] px-[10px] py-[6px] text-[11px] font-[400] uppercase tracking-[0.08em] text-[#D4AF37]">
+              <div className="mt-[10px] inline-flex items-center rounded-[12px] bg-[#1A1A1A] px-[10px] py-[6px] text-[11px] font-[400] uppercase tracking-[0.08em] text-[#00CC66]">
                 {t('profile.adminBadge')}
               </div>
             )}
@@ -157,7 +157,7 @@ export default function Profile() {
             type="button"
             onClick={handleOpenManagerContact}
             disabled={!profileSettings.managerContact.trim()}
-            className="flex-1 rounded-[12px] border border-[#222222] bg-[#1A1A1A] px-[14px] py-[12px] text-[12px] font-[400] text-[#FFFFFF] transition-colors hover:border-[#D4AF37] hover:text-[#D4AF37] disabled:text-[#9A9A9A]"
+            className="flex-1 rounded-[12px] border border-[#222222] bg-[#1A1A1A] px-[14px] py-[12px] text-[12px] font-[400] text-[#FFFFFF] transition-colors hover:border-[#00CC66] hover:text-[#00CC66] disabled:text-[#9A9A9A]"
           >
             {t('orders.contactManager')}
           </button>
@@ -165,7 +165,7 @@ export default function Profile() {
             <button
               type="button"
               onClick={() => navigate('/admin')}
-              className="flex-1 rounded-[12px] bg-[#D4AF37] px-[14px] py-[12px] text-[12px] font-[600] text-[#000000] transition-opacity hover:opacity-90"
+              className="flex-1 rounded-[12px] bg-[#00CC66] px-[14px] py-[12px] text-[12px] font-[600] text-[#000000] transition-opacity hover:opacity-90"
             >
               {t('profile.openAdmin')}
             </button>
@@ -206,7 +206,7 @@ export default function Profile() {
               <button
                 type="button"
                 onClick={handleSave}
-                className="w-full rounded-[12px] bg-[#D4AF37] px-[14px] py-[13px] text-[12px] font-[600] uppercase tracking-[0.08em] text-[#000000] transition-opacity hover:opacity-90"
+                className="w-full rounded-[12px] bg-[#00CC66] px-[14px] py-[13px] text-[12px] font-[600] uppercase tracking-[0.08em] text-[#000000] transition-opacity hover:opacity-90"
               >
                 {t('profile.save')}
               </button>

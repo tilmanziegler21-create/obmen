@@ -64,7 +64,7 @@ export default function Orders() {
 
   const getStatusDotClass = (status: string) => {
     if (status === 'ready') {
-      return 'bg-[#D4AF37]';
+      return 'bg-[#00CC66]';
     }
 
     if (status === 'processing') {
@@ -75,7 +75,7 @@ export default function Orders() {
       return 'bg-[#808080]';
     }
 
-    return 'bg-[#D4AF37]';
+    return 'bg-[#00CC66]';
   };
 
   return (
@@ -112,7 +112,7 @@ export default function Orders() {
                 type="button"
                 onClick={() => latestOrder && handleRepeatOrder(latestOrder.id)}
                 disabled={!latestOrder}
-                className="flex-1 rounded-[12px] border border-[#222222] bg-[#111111] px-[14px] py-[12px] text-[12px] font-[400] text-[#FFFFFF] transition-colors hover:border-[#D4AF37] hover:text-[#D4AF37] disabled:text-[#808080]"
+                className="flex-1 rounded-[12px] border border-[#222222] bg-[#111111] px-[14px] py-[12px] text-[12px] font-[400] text-[#FFFFFF] transition-colors hover:border-[#00CC66] hover:text-[#00CC66] disabled:text-[#808080]"
               >
                 {t('home.repeatOrder')}
               </button>
@@ -120,7 +120,7 @@ export default function Orders() {
                 type="button"
                 onClick={handleOpenManagerContact}
                 disabled={!profileSettings.managerContact.trim()}
-                className="flex-1 rounded-[12px] bg-[#D4AF37] px-[14px] py-[12px] text-[12px] font-[600] text-[#000000] transition-opacity hover:opacity-90 disabled:bg-[#1A1A1A] disabled:text-[#808080]"
+                className="flex-1 rounded-[12px] bg-[#00CC66] px-[14px] py-[12px] text-[12px] font-[600] text-[#000000] transition-opacity hover:opacity-90 disabled:bg-[#1A1A1A] disabled:text-[#808080]"
               >
                 {t('orders.contactManager')}
               </button>

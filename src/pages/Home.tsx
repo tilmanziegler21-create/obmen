@@ -2,10 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import WebApp from '@twa-dev/sdk';
 import { useNavigate } from 'react-router-dom';
-import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useStore } from '../store';
 import { useI18n } from '../i18n';
-import { calculateCustomerMetrics, getCustomerBenefits } from '../lib/customer';
+import { calculateCustomerMetrics, getCustomerBenefits, isOrderOwnedByUser } from '../lib/customer';
 import { getAllowedTargetAssets, getAssetCurrency, getAssetLabel, getRouteLabel } from '../lib/exchangeAssets';
 import { getAssetConversionRate } from '../lib/rates';
 
@@ -29,8 +28,8 @@ function AssetIcon({ asset }: { asset: 'EUR_CASH' | 'UAH_CARD' | 'USDT' }) {
   return (
     <div className="flex h-[20px] w-[20px] items-center justify-center">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-        <circle cx="8" cy="8" r="7" fill="none" stroke="#D4AF37" strokeWidth="1.2" />
-        <text x="8" y="11.2" textAnchor="middle" fontFamily="'JetBrains Mono',monospace" fontSize="7" fontWeight="700" fill="#D4AF37">₮</text>
+        <circle cx="8" cy="8" r="7" fill="none" stroke="#00CC66" strokeWidth="1.2" />
+        <text x="8" y="11.2" textAnchor="middle" fontFamily="'JetBrains Mono',monospace" fontSize="7" fontWeight="700" fill="#00CC66">₮</text>
       </svg>
     </div>
   );
@@ -39,34 +38,38 @@ function AssetIcon({ asset }: { asset: 'EUR_CASH' | 'UAH_CARD' | 'USDT' }) {
 export default function Home() {
   const navigate = useNavigate();
   const { t, language } = useI18n();
-  const {
+  const { 
+    rates, 
+    rateUpdatedAt,
+    orders, 
+    usdtReserve,
     cities,
     selectedCityId,
-    rates,
-    rateUpdatedAt,
-    orders,
-    usdtReserve,
     profileSettings,
-    setCity,
     selectedGiveAsset,
     selectedGetAsset,
-    setGiveAsset,
-    setGetAsset,
     giveAmount,
     getAmount,
+    setCity,
     setGiveAmount,
+    setGiveAsset,
+    setGetAsset,
     clearCheckoutPrefill,
-    setCommissionPercent,
+    setCommissionPercent
   } = useStore();
 
   const user = WebApp.initDataUnsafe?.user;
   const currentUserId = user?.id ? String(user.id) : null;
   const currentUserHandle = user?.username ? `@${user.username}` : (user?.first_name || t('checkout.unknownUser'));
+  
+  const [isReferralCopied, setIsReferralCopied] = useState(false);
   const [citySearch, setCitySearch] = useState('');
   const [activeAssetSheet, setActiveAssetSheet] = useState<'give' | 'get' | null>(null);
   const [isAmountConfirmed, setIsAmountConfirmed] = useState(false);
   const [isCityPickerOpen, setIsCityPickerOpen] = useState(!selectedCityId);
+
   const amountInputRef = useRef<HTMLInputElement>(null);
+  const calculatorRef = useRef<HTMLDivElement>(null);
 
   const metrics = useMemo(
     () => calculateCustomerMetrics(orders, currentUserHandle, currentUserId),
@@ -87,13 +90,19 @@ export default function Home() {
     }
   }, [selectedCityId]);
 
+  const currentUserOrders = useMemo(
+    () => orders.filter((order) => isOrderOwnedByUser(order, currentUserHandle, currentUserId)),
+    [currentUserHandle, currentUserId, orders],
+  );
+
+  const latestActiveOrder = useMemo(
+    () => currentUserOrders.find((order) => order.status === 'accepted' || order.status === 'processing' || order.status === 'ready') ?? null,
+    [currentUserOrders],
+  );
+
   const filteredCities = useMemo(() => {
     const query = citySearch.trim().toLowerCase();
-
-    if (!query) {
-      return cities;
-    }
-
+    if (!query) return cities;
     return cities.filter((city) => t(`cities.${city.cityKey}`).toLowerCase().includes(query));
   }, [cities, citySearch, t]);
 
@@ -108,6 +117,7 @@ export default function Home() {
   const isEurInvalid = selectedGiveAsset === 'EUR_CASH' && (Number(giveAmount) % 10 !== 0 || Number(giveAmount) % 1 !== 0);
   const isReserveBlocked = isCityMissing || isCityInactive || isCashReserveInsufficient || isUsdtReserveInsufficient;
   const isValid = Number(giveAmount) > 0 && !isOverLimit && !isReserveBlocked && (!isEurInvalid || Number(giveAmount) === 0);
+  
   const reserveMessage =
     isCityMissing
       ? t('home.cityRequired')
@@ -119,13 +129,35 @@ export default function Home() {
             ? t('home.cityCashReserveError')
             : null;
 
-  const currentRate = getAssetConversionRate(selectedGiveAsset, selectedGetAsset, rates);
-  const formattedRateUpdatedAt = new Date(rateUpdatedAt).toLocaleTimeString(language, {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-  const giveAssetOptions = ['EUR_CASH', 'UAH_CARD', 'USDT'] as const;
-  const getAssetOptions = getAllowedTargetAssets(selectedGiveAsset);
+  const handleOpenProfile = () => {
+    WebApp.HapticFeedback.impactOccurred('light');
+    navigate('/profile');
+  };
+
+  const handleOpenSupport = () => {
+    WebApp.HapticFeedback.impactOccurred('light');
+    WebApp.openTelegramLink('https://t.me/cryptobull_manager');
+  };
+
+  const handleCopyReferralCode = async () => {
+    const referralCode = profileSettings.referralCode.trim();
+    if (!referralCode) return;
+
+    try {
+      await navigator.clipboard.writeText(referralCode);
+      WebApp.HapticFeedback.notificationOccurred('success');
+      setIsReferralCopied(true);
+      window.setTimeout(() => setIsReferralCopied(false), 1500);
+    } catch (error) {
+      console.error('Failed to copy referral code', error);
+      WebApp.HapticFeedback.notificationOccurred('error');
+    }
+  };
+
+  const scrollToCalculator = () => {
+    WebApp.HapticFeedback.impactOccurred('medium');
+    calculatorRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   const handleSwapDirection = () => {
     WebApp.HapticFeedback.impactOccurred('medium');
@@ -145,23 +177,11 @@ export default function Home() {
     } else {
       setGetAsset(asset);
     }
-
     setActiveAssetSheet(null);
   };
 
-  const routeHint = getRouteLabel(selectedGiveAsset, selectedGetAsset, language);
-  const routeInfo =
-    selectedGetAsset === 'USDT'
-      ? `Комиссия ${benefits.effectiveCommissionPercent.toFixed(1)}% · Перевод USDT на ваш кошелек`
-      : selectedGetAsset === 'UAH_CARD'
-        ? `Комиссия ${benefits.effectiveCommissionPercent.toFixed(1)}% · Перевод на карту UAH`
-        : `Комиссия ${benefits.effectiveCommissionPercent.toFixed(1)}% · Получение наличных EUR по заявке`;
-
   const handleNext = () => {
-    if (!isValid) {
-      return;
-    }
-
+    if (!isValid) return;
     WebApp.HapticFeedback.impactOccurred('medium');
     clearCheckoutPrefill();
     navigate('/checkout');
@@ -175,59 +195,210 @@ export default function Home() {
     }
   };
 
+  const currentRate = getAssetConversionRate(selectedGiveAsset, selectedGetAsset, rates);
+  const formattedRateUpdatedAt = new Date(rateUpdatedAt).toLocaleTimeString(language, {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  const giveAssetOptions = ['EUR_CASH', 'UAH_CARD', 'USDT'] as const;
+  const getAssetOptions = getAllowedTargetAssets(selectedGiveAsset);
+
   return (
     <>
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="flex-1 px-[16px] pb-[24px]"
+        className="flex-1 flex flex-col px-[16px] pb-[24px]"
         style={{ paddingTop: 'max(16px, env(safe-area-inset-top))' }}
       >
-        <header className="mb-[24px] flex items-center justify-between gap-[12px]">
-          <div>
-            <div className="text-[24px] font-[800] text-[#FFFFFF]">{t('nav.exchange')}</div>
-            <div className="mt-[4px] text-[12px] font-[400] uppercase tracking-[0.12em] text-[#808080]">
-              {routeHint}
-            </div>
+        {/* ВЕРХНИЙ БЛОК: Приветствие и Авторизация */}
+        <header className="mb-[24px] flex items-start justify-between">
+          <div className="flex flex-col">
+            <span className="text-[14px] font-[500] text-[#9A9A9A]">{t('home.goodAfternoon')}</span>
+            <span className="text-[20px] font-[800] text-[#FFFFFF]">{t('home.brandName')}</span>
           </div>
-          <LanguageSwitcher />
+          <button 
+            onClick={handleOpenProfile}
+            className="flex h-[40px] w-[40px] items-center justify-center rounded-full bg-gradient-to-br from-[#00CC66] to-[#00994C] text-[18px] font-[700] text-[#000000] shadow-[0_0_15px_rgba(0,204,102,0.3)]"
+          >
+            {user?.first_name ? user.first_name.charAt(0).toUpperCase() : 'K'}
+          </button>
         </header>
 
-        <div className="space-y-[16px]">
-          <section className="rounded-[16px] border border-[#222222] bg-[#111111] p-[24px]">
-            <div className="grid grid-cols-3 gap-[8px] rounded-[12px] bg-[#0D0D0D] p-[4px]">
-              {giveAssetOptions.map((asset) => (
-                <button
-                  key={asset}
-                  type="button"
-                  onClick={() => {
-                    WebApp.HapticFeedback.selectionChanged();
-                    setGiveAsset(asset);
-                  }}
-                  className={`rounded-[12px] px-[12px] py-[14px] text-left transition-colors ${selectedGiveAsset === asset ? 'bg-[#1A1A1A]' : 'bg-transparent'}`}
-                >
-                  <div className="text-[13px] font-[600] text-[#FFFFFF]">{getAssetLabel(asset, language)}</div>
-                </button>
+        <div className="space-y-[12px] flex-1 flex flex-col">
+          {/* Главный блок коммерческих показателей */}
+          <section className="relative overflow-hidden rounded-[20px] bg-gradient-to-br from-[#1A1A1A] to-[#0D0D0D] p-[20px]">
+            <div className="absolute right-0 top-0 h-full w-[45%] opacity-80">
+              <div className="absolute inset-0 bg-[url('https://coreva-normal.trae.ai/api/ide/v1/text_to_image?prompt=3d%20golden%20bull%20head%20statue%20dark%20background&image_size=square')] bg-cover bg-center bg-no-repeat mix-blend-screen" />
+            </div>
+            <div className="relative z-10 w-[65%]">
+              <div className="inline-flex items-center gap-[6px] rounded-full bg-[#111111]/80 px-[8px] py-[4px] backdrop-blur-sm">
+                <div className="h-[6px] w-[6px] rounded-full bg-[#00CC66]" />
+                <span className="text-[10px] font-[500] text-[#FFFFFF]">{t('home.onlineAverageTime')}</span>
+              </div>
+              <div className="mt-[16px] text-[12px] font-[500] uppercase tracking-wider text-[#9A9A9A]">
+                {t('home.bestRateToday')}
+              </div>
+              <div className="mt-[4px] text-[24px] font-[700] leading-tight text-[#FFFFFF]">
+                1 EUR = <br />{rates.EUR_USDT.toFixed(4)} USDT
+              </div>
+              <div className="mt-[8px] text-[11px] font-[400] text-[#808080]">
+                Обновлено {formattedRateUpdatedAt}
+              </div>
+            </div>
+          </section>
+
+          {/* Строка статуса (если есть активная заявка) */}
+          {latestActiveOrder && (
+            <div className="flex items-center justify-between rounded-[12px] bg-[#1A1A1A]/50 px-[16px] py-[12px] border border-[#222222]">
+              <div className="flex items-center gap-[8px]">
+                <div className="h-[8px] w-[8px] rounded-full bg-[#00CC66]" />
+                <span className="text-[13px] font-[500] text-[#FFFFFF]">
+                  {t('home.orderProcessing', { id: latestActiveOrder.id })}
+                </span>
+              </div>
+              <button onClick={() => navigate('/orders')} className="text-[#9A9A9A]">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 18l6-6-6-6" />
+                </svg>
+              </button>
+            </div>
+          )}
+
+          {/* Основной элемент действия (Скролл к калькулятору) */}
+          <button
+            type="button"
+            onClick={scrollToCalculator}
+            className="flex w-full items-center justify-between rounded-[16px] bg-gradient-to-r from-[#00CC66] to-[#00994C] px-[24px] py-[18px] transition-opacity hover:opacity-90 shadow-[0_4px_14px_rgba(0,204,102,0.25)]"
+          >
+            <span className="text-[15px] font-[700] uppercase tracking-wider text-[#000000]">
+              {t('home.quickExchange')}
+            </span>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 12h14M12 5l7 7-7 7" />
+            </svg>
+          </button>
+
+          {/* Панель критериев эффективности */}
+          <section className="flex gap-[8px]">
+            <div className="flex flex-1 flex-col items-center justify-center rounded-[16px] bg-[#111111] p-[12px] text-center">
+              <div className="mb-[4px] text-[16px]">⭐</div>
+              <div className="text-[11px] font-[600] text-[#FFFFFF]">{t('home.ratingLabel')}</div>
+            </div>
+            <div className="flex flex-1 flex-col items-center justify-center rounded-[16px] bg-[#111111] p-[12px] text-center">
+              <div className="mb-[4px] text-[16px]">🛡️</div>
+              <div className="text-[11px] font-[600] text-[#FFFFFF]">{t('home.successfulExchanges')}</div>
+            </div>
+            <div className="flex flex-1 flex-col items-center justify-center rounded-[16px] bg-[#111111] p-[12px] text-center">
+              <div className="mb-[4px] text-[16px]">⏱️</div>
+              <div className="text-[11px] font-[600] text-[#FFFFFF]">{t('home.averageExecutionTime')}</div>
+            </div>
+          </section>
+
+          {/* Блок архивных транзакций */}
+          <section className="rounded-[16px] bg-[#111111] p-[20px]">
+            <div className="mb-[16px] flex items-center justify-between">
+              <h2 className="text-[12px] font-[700] uppercase tracking-wider text-[#9A9A9A]">
+                {t('home.recentExchanges')}
+              </h2>
+              <button onClick={() => navigate('/orders')} className="text-[12px] font-[500] text-[#00CC66]">
+                {t('home.seeAll')}
+              </button>
+            </div>
+            <div className="space-y-[12px]">
+              {currentUserOrders.slice(0, 3).map((order) => (
+                <div key={order.id} className="flex items-center gap-[12px]">
+                  <div className="h-[8px] w-[8px] rounded-full bg-[#00CC66]" />
+                  <div className="flex flex-1 items-center justify-between text-[14px]">
+                    <span className="font-[600] text-[#FFFFFF]">
+                      {order.giveCurrency === 'EUR' ? '€' : ''}{order.giveAmount} → {order.getCurrency}
+                    </span>
+                    <span className="text-[12px] font-[400] text-[#808080]">
+                      {new Date(order.createdAt).toLocaleTimeString(language, { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                </div>
               ))}
+              {currentUserOrders.length === 0 && (
+                <div className="text-[13px] font-[400] text-[#808080]">
+                  {t('home.historyEmpty')}
+                </div>
+              )}
             </div>
           </section>
 
-          <section className="rounded-[16px] border border-[#222222] bg-[#111111] p-[24px]">
-            <div className="flex items-center justify-between gap-[12px]">
-              <div className="text-[11px] font-[400] uppercase tracking-[0.12em] text-[#9A9A9A]">{t('home.rateLabel')}</div>
-              <div className="text-[12px] font-[400] text-[#9A9A9A]">{t('home.rateUpdated', { time: formattedRateUpdatedAt })}</div>
-            </div>
-            <div className="mt-[10px] text-[24px] font-[600] leading-[1.15] text-[#FFFFFF]">
-              1 {getAssetLabel(selectedGiveAsset, language)} = {currentRate.toFixed(4)} {getAssetCurrency(selectedGetAsset)}
-            </div>
-            <div className="mt-[8px] text-[13px] font-[400] text-[#9A9A9A]">{routeInfo}</div>
-          </section>
-
-          <section className="rounded-[16px] border border-[#222222] bg-[#111111] p-[24px]">
-            <div className="relative space-y-[16px] py-[4px]">
+          {/* Двухстолбцовый блок */}
+          <section className="flex gap-[8px]">
+            <div className="flex flex-1 flex-col justify-between rounded-[16px] bg-[#111111] p-[16px]">
               <div>
-                <div className="mb-[8px] text-[12px] font-[400] text-[#9A9A9A]">{t('home.youGive')}</div>
-                <div className="flex h-[64px] items-center justify-between gap-[12px] rounded-[12px] bg-[#1A1A1A] px-[16px]">
+                <div className="mb-[8px] text-[20px]">🌍</div>
+                <h3 className="mb-[8px] text-[11px] font-[700] uppercase tracking-wider text-[#9A9A9A]">
+                  {t('home.workingInGermany')}
+                </h3>
+                <div className="text-[13px] font-[600] leading-snug text-[#FFFFFF]">
+                  Франкфурт, Берлин,<br />Мюнхен, Гамбург
+                </div>
+              </div>
+              <div className="mt-[12px] text-[11px] font-[500] text-[#808080]">
+                {t('home.andMoreCities')}
+              </div>
+            </div>
+            <div className="flex flex-1 flex-col justify-between rounded-[16px] bg-[#1A1A1A] p-[16px]">
+              <div>
+                <div className="mb-[8px] text-[20px]">👥</div>
+                <h3 className="mb-[8px] text-[11px] font-[700] uppercase tracking-wider text-[#00CC66]">
+                  {t('home.inviteFriendsTitle')}
+                </h3>
+                <div className="text-[13px] font-[600] leading-snug text-[#FFFFFF]">
+                  {t('home.inviteFriendsText')}
+                </div>
+              </div>
+              <button className="mt-[12px] text-left text-[11px] font-[700] text-[#00CC66]">
+                {t('home.learnMoreArrow')}
+              </button>
+            </div>
+          </section>
+
+          {/* Панель поддержки */}
+          <section className="flex items-center justify-between rounded-[16px] bg-[#111111] p-[16px]">
+            <div className="flex items-center gap-[12px]">
+              <div className="flex h-[40px] w-[40px] items-center justify-center rounded-full bg-[#1A1A1A] text-[20px]">
+                🎧
+              </div>
+              <div>
+                <div className="text-[14px] font-[600] text-[#FFFFFF]">{t('home.supportTitle')}</div>
+                <div className="text-[12px] font-[400] text-[#808080]">{t('home.supportSubtitle')}</div>
+              </div>
+            </div>
+            <button
+              onClick={handleOpenSupport}
+              className="flex items-center gap-[6px] rounded-full bg-[#1A1A1A] px-[16px] py-[8px] text-[13px] font-[500] text-[#FFFFFF] transition-colors hover:bg-[#222222]"
+            >
+              {t('home.writeMessage')}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13" />
+                <polygon points="22 2 15 22 11 13 2 9 22 2" />
+              </svg>
+            </button>
+          </section>
+
+          {/* НИЖНИЙ БЛОК: Калькулятор обмена */}
+          <div ref={calculatorRef} className="pt-[16px]">
+            <section className="rounded-[24px] bg-[#111111] p-[20px] shadow-lg">
+              <div className="mb-[16px] flex items-center justify-between">
+                <span className="text-[12px] font-[600] uppercase tracking-wider text-[#9A9A9A]">{t('home.rateNow')}</span>
+                <div className="flex items-center gap-[6px]">
+                  <div className="h-[6px] w-[6px] rounded-full bg-[#00CC66]" />
+                  <span className="text-[13px] font-[600] text-[#FFFFFF]">
+                    1 {getAssetLabel(selectedGiveAsset, language)} = {currentRate.toFixed(4)} {getAssetCurrency(selectedGetAsset)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Поле ввода (Отдаёте) */}
+              <div className="relative rounded-[16px] bg-[#1A1A1A] p-[16px]">
+                <div className="mb-[4px] text-[12px] font-[500] text-[#9A9A9A]">{t('home.youGive')}</div>
+                <div className="flex items-center justify-between gap-[12px]">
                   <input
                     ref={amountInputRef}
                     type="number"
@@ -237,205 +408,172 @@ export default function Home() {
                       setGiveAmount(e.target.value);
                     }}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        handleConfirmAmount();
-                      }
+                      if (e.key === 'Enter') handleConfirmAmount();
                     }}
                     placeholder="0"
                     min="0"
-                    step={selectedGiveAsset === 'EUR_CASH' ? '10' : selectedGiveAsset === 'USDT' ? '0.01' : '1'}
+                    step={selectedGiveAsset === 'EUR_CASH' ? '10' : '0.01'}
                     inputMode="decimal"
-                    className="min-w-0 flex-1 bg-transparent text-[28px] font-[600] text-[#FFFFFF] outline-none placeholder:text-[#9A9A9A]"
+                    className="min-w-0 flex-1 bg-transparent text-[32px] font-[700] text-[#FFFFFF] outline-none placeholder:text-[#333333]"
                   />
                   <button
                     type="button"
-                    onClick={handleConfirmAmount}
-                    className={`flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full border transition-colors ${
-                      giveAmount
-                        ? 'border-[#D4AF37] bg-[#D4AF37] text-[#000000]'
-                        : 'border-[#222222] bg-[#111111] text-[#808080]'
-                    }`}
-                    aria-label="Confirm amount"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                      <path d="M3 8.2l3 3L13 4.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => setActiveAssetSheet('give')}
-                    className="flex shrink-0 items-center gap-[8px] text-[#FFFFFF]"
+                    className="flex shrink-0 items-center gap-[6px] rounded-[12px] bg-[#222222] px-[12px] py-[8px]"
                   >
-                    <AssetIcon asset={selectedGiveAsset} />
-                    <span className="text-[14px] font-[600]">{getAssetLabel(selectedGiveAsset, language)}</span>
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                      <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
+                    <span className="text-[16px]">{selectedGiveAsset === 'EUR_CASH' ? '🇪🇺' : selectedGiveAsset === 'UAH_CARD' ? '🇺🇦' : '₮'}</span>
+                    <span className="text-[14px] font-[600] text-[#FFFFFF]">{getAssetCurrency(selectedGiveAsset)}</span>
                   </button>
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={handleSwapDirection}
-                className="absolute left-1/2 top-1/2 z-10 flex h-[32px] w-[32px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-[#222222] bg-[#111111] text-[#D4AF37]"
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <path d="M4 5h8M4 5l2-2M4 5l2 2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M12 11H4M12 11l-2-2M12 11l-2 2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
+              {/* Указатель направления */}
+              <div className="relative z-10 -my-[12px] flex justify-center">
+                <button 
+                  onClick={handleSwapDirection}
+                  className="flex h-[36px] w-[36px] items-center justify-center rounded-full border-4 border-[#111111] bg-[#222222] text-[#00CC66] transition-transform hover:scale-105 active:scale-95"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 5v14M19 12l-7 7-7-7" />
+                  </svg>
+                </button>
+              </div>
 
-              <div>
-                <div className="mb-[8px] text-[12px] font-[400] text-[#9A9A9A]">{t('checkout.youGet')}</div>
-                <div className="flex h-[64px] items-center justify-between gap-[12px] rounded-[12px] bg-[#1A1A1A] px-[16px]">
-                  <div className={`min-w-0 flex-1 truncate text-[28px] font-[600] ${getAmount ? 'text-[#FFFFFF]' : 'text-[#9A9A9A]'}`}>
+              {/* Поле вывода (Получаете) */}
+              <div className="relative rounded-[16px] bg-[#1A1A1A] p-[16px]">
+                <div className="mb-[4px] text-[12px] font-[500] text-[#9A9A9A]">{t('home.youGet')}</div>
+                <div className="flex items-center justify-between gap-[12px]">
+                  <div className={`truncate min-w-0 flex-1 text-[32px] font-[700] ${getAmount ? 'text-[#FFFFFF]' : 'text-[#333333]'}`}>
                     {getAmount || '0'}
                   </div>
                   <button
                     type="button"
                     onClick={() => setActiveAssetSheet('get')}
-                    className="flex shrink-0 items-center gap-[8px] text-[#FFFFFF]"
+                    className="flex shrink-0 items-center gap-[6px] rounded-[12px] bg-[#222222] px-[12px] py-[8px]"
                   >
-                    <AssetIcon asset={selectedGetAsset} />
-                    <span className="text-[14px] font-[600]">{getAssetLabel(selectedGetAsset, language)}</span>
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                      <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
+                    <span className="text-[16px]">{selectedGetAsset === 'EUR_CASH' ? '🇪🇺' : selectedGetAsset === 'UAH_CARD' ? '🇺🇦' : '₮'}</span>
+                    <span className="text-[14px] font-[600] text-[#FFFFFF]">{getAssetCurrency(selectedGetAsset)}</span>
                   </button>
                 </div>
               </div>
-            </div>
-
-            <div className="mt-[16px] flex items-center justify-between gap-[12px] border-t border-[#222222] pt-[16px] text-[13px]">
-              <div className="flex items-center gap-[8px] text-[#9A9A9A]">
-                <span className="inline-flex h-[20px] w-[20px] items-center justify-center rounded-full border border-[#222222] bg-[#1A1A1A] text-[#D4AF37]">
-                  <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
-                    <path d="M3 8.2l3 3L13 4.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-                <span>{t('home.commissionIncluded')}</span>
-              </div>
-              <div className="flex items-center gap-[10px]">
-                {giveAmount && (
-                  <span className={`text-[12px] font-[400] ${isAmountConfirmed ? 'text-[#D4AF37]' : 'text-[#9A9A9A]'}`}>
-                    {isAmountConfirmed ? t('home.amountConfirmed') : t('home.amountEditing')}
+              
+              <div className="mt-[16px] flex items-center justify-between border-t border-[#222222] pt-[16px] text-[13px]">
+                <div className="flex items-center gap-[8px] text-[#9A9A9A]">
+                  <span className="inline-flex h-[20px] w-[20px] items-center justify-center rounded-full border border-[#222222] bg-[#1A1A1A] text-[#00CC66]">
+                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+                      <path d="M3 8.2l3 3L13 4.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
                   </span>
-                )}
-                <div className="text-right font-[600] text-[#FFFFFF]">{benefits.effectiveCommissionPercent.toFixed(1)}%</div>
+                  <span>{t('home.commissionIncluded')}</span>
+                </div>
+                <div className="flex items-center gap-[10px]">
+                  <div className="text-right font-[600] text-[#FFFFFF]">{benefits.effectiveCommissionPercent.toFixed(1)}%</div>
+                </div>
               </div>
-            </div>
-          </section>
+            </section>
 
-          <section className="rounded-[16px] border border-[#222222] bg-[#111111] p-[24px]">
-            <div className="text-[11px] font-[400] uppercase tracking-[0.12em] text-[#9A9A9A]">{t('home.cityTitle')}</div>
-            {currentCity && !isCityPickerOpen ? (
-              <div className="mt-[12px] space-y-[12px]">
-                <div className="flex w-full items-center gap-[12px] rounded-[12px] bg-[#1A1A1A] px-[12px] py-[14px] text-left">
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-[14px] font-[600] text-[#FFFFFF]">{t(`cities.${currentCity.cityKey}`)}</div>
-                    {!currentCity.isActive && (
-                      <div className="mt-[4px] text-[12px] font-[400] text-[#9A9A9A]">{t('home.cityInactive')}</div>
+            {/* Выбор города */}
+            <section className="mt-[12px] rounded-[16px] border border-[#222222] bg-[#111111] p-[20px]">
+              <div className="text-[11px] font-[400] uppercase tracking-[0.12em] text-[#9A9A9A]">{t('home.cityTitle')}</div>
+              {currentCity && !isCityPickerOpen ? (
+                <div className="mt-[12px] space-y-[12px]">
+                  <div className="flex w-full items-center gap-[12px] rounded-[12px] bg-[#1A1A1A] px-[12px] py-[14px] text-left">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[14px] font-[600] text-[#FFFFFF]">{t(`cities.${currentCity.cityKey}`)}</div>
+                      {!currentCity.isActive && (
+                        <div className="mt-[4px] text-[12px] font-[400] text-[#9A9A9A]">{t('home.cityInactive')}</div>
+                      )}
+                    </div>
+                    <div className="shrink-0 text-[12px] font-[400] text-[#00CC66]">{t('home.citySelected')}</div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      WebApp.HapticFeedback.selectionChanged();
+                      setCitySearch('');
+                      setIsCityPickerOpen(true);
+                    }}
+                    className="w-full rounded-[12px] border border-[#222222] bg-transparent px-[14px] py-[12px] text-[13px] font-[400] text-[#FFFFFF] transition-colors hover:border-[#00CC66] hover:text-[#00CC66]"
+                  >
+                    {t('home.chooseOtherCity')}
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="sticky top-0 mt-[12px] bg-[#111111] pb-[12px]">
+                    <input
+                      type="text"
+                      value={citySearch}
+                      onChange={(e) => setCitySearch(e.target.value)}
+                      placeholder={t('home.searchPlaceholder')}
+                      className="w-full rounded-[12px] border border-[#222222] bg-[#1A1A1A] px-[16px] py-[14px] text-[14px] text-[#FFFFFF] outline-none placeholder:text-[#9A9A9A]"
+                    />
+                  </div>
+
+                  <div className="space-y-[4px] max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                    {filteredCities.map((city) => (
+                      <button
+                        key={city.id}
+                        type="button"
+                        onClick={() => {
+                          WebApp.HapticFeedback.selectionChanged();
+                          setCity(city.id);
+                          setCitySearch('');
+                          setIsCityPickerOpen(false);
+                        }}
+                        className="flex w-full items-center gap-[12px] rounded-[12px] border border-transparent px-[12px] py-[14px] text-left transition-colors hover:bg-[#1A1A1A]"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-[14px] font-[600] text-[#FFFFFF]">{t(`cities.${city.cityKey}`)}</div>
+                          {!city.isActive && (
+                            <div className="mt-[4px] text-[12px] font-[400] text-[#9A9A9A]">{t('home.cityInactive')}</div>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                    {filteredCities.length === 0 && (
+                      <div className="rounded-[12px] bg-[#1A1A1A] px-[14px] py-[14px] text-[13px] font-[400] text-[#9A9A9A]">
+                        {t('home.noCitiesFound')}
+                      </div>
                     )}
                   </div>
-                  <div className="shrink-0 text-[12px] font-[400] text-[#D4AF37]">{t('home.citySelected')}</div>
-                </div>
+                </>
+              )}
+            </section>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    WebApp.HapticFeedback.selectionChanged();
-                    setCitySearch('');
-                    setIsCityPickerOpen(true);
-                  }}
-                  className="w-full rounded-[12px] border border-[#222222] bg-transparent px-[14px] py-[12px] text-[13px] font-[400] text-[#FFFFFF] transition-colors hover:border-[#D4AF37] hover:text-[#D4AF37]"
-                >
-                  {t('home.chooseOtherCity')}
-                </button>
+            {Number(giveAmount) > 0 && (isOverLimit || isEurInvalid || !!reserveMessage) && (
+              <div className="mt-[12px] rounded-[16px] border border-[#3A2323] bg-[#1A1010] px-[16px] py-[14px] text-[13px] font-[400] text-[#F1C6C6]">
+                {isOverLimit ? t('home.limitError') : reserveMessage ?? t('home.amountError')}
               </div>
-            ) : (
-              <>
-                <div className="sticky top-0 mt-[12px] bg-[#111111] pb-[12px]">
-                  <input
-                    type="text"
-                    value={citySearch}
-                    onChange={(e) => setCitySearch(e.target.value)}
-                    placeholder={t('home.searchPlaceholder')}
-                    className="w-full rounded-[12px] border border-[#222222] bg-[#1A1A1A] px-[16px] py-[14px] text-[14px] text-[#FFFFFF] outline-none placeholder:text-[#9A9A9A]"
-                  />
-                </div>
-
-                <div className="space-y-[4px]">
-                  {filteredCities.map((city) => (
-                    <button
-                      key={city.id}
-                      type="button"
-                      onClick={() => {
-                        WebApp.HapticFeedback.selectionChanged();
-                        setCity(city.id);
-                        setCitySearch('');
-                        setIsCityPickerOpen(false);
-                      }}
-                      className="flex w-full items-center gap-[12px] rounded-[12px] border border-transparent px-[12px] py-[14px] text-left transition-colors hover:bg-[#151515]"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[14px] font-[600] text-[#FFFFFF]">{t(`cities.${city.cityKey}`)}</div>
-                        {!city.isActive && (
-                          <div className="mt-[4px] text-[12px] font-[400] text-[#9A9A9A]">{t('home.cityInactive')}</div>
-                        )}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-
-                {filteredCities.length === 0 && (
-                  <div className="mt-[12px] rounded-[12px] bg-[#1A1A1A] px-[14px] py-[14px] text-[13px] font-[400] text-[#9A9A9A]">
-                    {t('home.noCitiesFound')}
-                  </div>
-                )}
-              </>
             )}
 
-            <div className="mt-[16px] flex items-center justify-between gap-[12px] border-t border-[#222222] pt-[16px] text-[13px]">
-              <div className="flex items-center gap-[8px] text-[#9A9A9A]">
-                <span>{currentCity ? t('home.selectedCitySummary', { city: t(`cities.${currentCity.cityKey}`) }) : t('home.cityRequired')}</span>
-              </div>
-              <div className="text-right font-[400] text-[#9A9A9A]">
-                {currentCity && !currentCity.isActive ? t('home.cityInactive') : ''}
-              </div>
-            </div>
-          </section>
-
-          {Number(giveAmount) > 0 && (isOverLimit || isEurInvalid || !!reserveMessage) && (
-            <div className="rounded-[16px] border border-[#3A2323] bg-[#1A1010] px-[16px] py-[14px] text-[13px] font-[400] text-[#F1C6C6]">
-              {isOverLimit ? t('home.limitError') : reserveMessage ?? t('home.amountError')}
-            </div>
-          )}
-
-          <button
-            type="button"
-            onClick={handleNext}
-            disabled={!isValid}
-            className={`w-full rounded-[12px] px-[24px] py-[16px] text-[13px] font-[600] uppercase tracking-[0.08em] transition-opacity ${isValid ? 'bg-[#D4AF37] text-[#000000] hover:opacity-90' : 'bg-[#1A1A1A] text-[#808080]'}`}
-          >
-            {t('home.ctaCash')}
-          </button>
+            <button
+              type="button"
+              onClick={handleNext}
+              disabled={!isValid}
+              className={`mt-[16px] w-full rounded-[16px] px-[24px] py-[18px] text-[15px] font-[700] uppercase tracking-[0.08em] transition-opacity ${isValid ? 'bg-[#00CC66] text-[#000000] hover:opacity-90 shadow-[0_4px_14px_rgba(0,204,102,0.25)]' : 'bg-[#1A1A1A] text-[#808080]'}`}
+            >
+              {t('home.ctaCash')}
+            </button>
+          </div>
         </div>
       </motion.div>
 
+      {/* Asset Selection Sheet */}
       {activeAssetSheet && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-[rgba(0,0,0,0.7)] px-[16px]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(0,0,0,0.8)] px-[16px] backdrop-blur-sm">
           <button
             type="button"
             aria-label="Close asset sheet"
             onClick={() => setActiveAssetSheet(null)}
             className="absolute inset-0"
           />
-          <div className="relative w-full max-w-[380px] rounded-[16px] border border-[#222222] bg-[#111111] px-[20px] py-[20px] shadow-[0_24px_64px_rgba(0,0,0,0.45)]">
-            <div className="text-[12px] font-[400] uppercase tracking-[0.12em] text-[#9A9A9A]">
-              {activeAssetSheet === 'give' ? t('home.youGive') : t('checkout.youGet')}
+          <div className="relative w-full max-w-[380px] rounded-[24px] border border-[#222222] bg-[#111111] px-[20px] py-[24px] shadow-2xl">
+            <div className="mb-[16px] text-center text-[12px] font-[600] uppercase tracking-[0.12em] text-[#9A9A9A]">
+              {activeAssetSheet === 'give' ? t('home.youGive') : t('home.youGet')}
             </div>
-            <div className="mt-[14px] grid grid-cols-3 gap-[8px]">
+            <div className="grid grid-cols-3 gap-[8px]">
               {(activeAssetSheet === 'give' ? giveAssetOptions : getAssetOptions).map((asset: 'EUR_CASH' | 'UAH_CARD' | 'USDT') => {
                 const isSelected = (activeAssetSheet === 'give' ? selectedGiveAsset : selectedGetAsset) === asset;
 
@@ -444,7 +582,7 @@ export default function Home() {
                     key={asset}
                     type="button"
                     onClick={() => handleSelectAsset(activeAssetSheet, asset)}
-                    className={`flex min-h-[84px] w-full flex-col items-center justify-center gap-[8px] rounded-[12px] px-[10px] py-[14px] text-center transition-colors ${isSelected ? 'bg-[#1A1A1A]' : 'bg-[#151515] hover:bg-[#1A1A1A]'}`}
+                    className={`flex min-h-[84px] w-full flex-col items-center justify-center gap-[8px] rounded-[16px] px-[10px] py-[14px] text-center transition-colors ${isSelected ? 'bg-[#1A1A1A] border border-[#00CC66]' : 'bg-[#151515] border border-transparent hover:bg-[#1A1A1A]'}`}
                   >
                     <AssetIcon asset={asset} />
                     <span className="text-[14px] font-[600] text-[#FFFFFF]">{getAssetLabel(asset, language)}</span>
