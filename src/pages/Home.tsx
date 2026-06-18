@@ -4,6 +4,7 @@ import WebApp from '@twa-dev/sdk';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { useI18n } from '../i18n';
+import LanguageSwitcher from '../components/LanguageSwitcher';
 import { calculateCustomerMetrics, getCustomerBenefits, isOrderOwnedByUser } from '../lib/customer';
 import { getAllowedTargetAssets, getAssetCurrency, getAssetLabel, getRouteLabel } from '../lib/exchangeAssets';
 import { getAssetConversionRate } from '../lib/rates';
@@ -212,17 +213,20 @@ export default function Home() {
         style={{ paddingTop: 'max(16px, env(safe-area-inset-top))' }}
       >
         {/* ВЕРХНИЙ БЛОК: Приветствие и Авторизация */}
-        <header className="mb-[24px] flex items-start justify-between">
+        <header className="mb-[24px] flex items-center justify-between">
           <div className="flex flex-col">
             <span className="text-[14px] font-[500] text-[#9A9A9A]">{t('home.goodAfternoon')}</span>
             <span className="text-[20px] font-[800] text-[#FFFFFF]">{t('home.brandName')}</span>
           </div>
-          <button 
-            onClick={handleOpenProfile}
-            className="flex h-[40px] w-[40px] items-center justify-center rounded-full bg-gradient-to-br from-[#00CC66] to-[#00994C] text-[18px] font-[700] text-[#000000] shadow-[0_0_15px_rgba(0,204,102,0.3)]"
-          >
-            {user?.first_name ? user.first_name.charAt(0).toUpperCase() : 'K'}
-          </button>
+          <div className="flex items-center gap-[12px]">
+            <LanguageSwitcher />
+            <button 
+              onClick={handleOpenProfile}
+              className="flex shrink-0 h-[40px] w-[40px] items-center justify-center rounded-full bg-gradient-to-br from-[#00CC66] to-[#00994C] text-[18px] font-[700] text-[#000000] shadow-[0_0_15px_rgba(0,204,102,0.3)]"
+            >
+              {user?.first_name ? user.first_name.charAt(0).toUpperCase() : 'K'}
+            </button>
+          </div>
         </header>
 
         <div className="space-y-[12px] flex-1 flex flex-col">
@@ -333,10 +337,10 @@ export default function Home() {
               <div>
                 <div className="mb-[8px] text-[20px]">🌍</div>
                 <h3 className="mb-[8px] text-[11px] font-[700] uppercase tracking-wider text-[#9A9A9A]">
-                  {t('home.workingInGermany')}
+                  {t('home.workingWorldwide')}
                 </h3>
                 <div className="text-[13px] font-[600] leading-snug text-[#FFFFFF]">
-                  {t('home.germanyCitiesList')}
+                  {t('home.globalCitiesList')}
                 </div>
               </div>
               <div className="mt-[12px] text-[11px] font-[500] text-[#808080]">
