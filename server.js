@@ -729,44 +729,57 @@ app.post('/api/orders', async (req, res) => {
 
   let nextState = applyOrderReservesOnCreate(state, createdOrder);
 
-  if (!botToken) {
-    res.status(500).json({ error: 'Order failed: BOT_TOKEN is missing on server' });
+  if (!botToken || !targetChatId) {
+    console.warn('BOT_TOKEN or CHAT_ID is missing. Order will be saved, but Telegram notification will not be sent.');
+    writeState(nextState);
+    res.json({
+      ok: true,
+      isVerified,
+      telegramDeliveryOk: false,
+      warning: 'BOT_TOKEN or CHAT_ID is missing',
+      createdOrder,
+      state: getPublicState(nextState),
+    });
     return;
   }
-  
-  if (!targetChatId) {
-    res.status(500).json({ error: 'Order failed: CHAT_ID is missing on server' });
-    return;
+
+  try {
+    const telegramMessage = await sendTelegramMessage(
+      targetChatId,
+      formatTelegramOrderMessage(createdOrder, isVerified),
+      getOrderKeyboard(createdOrder.id),
+    );
+
+    createdOrder.telegramChatId = String(telegramMessage.chat?.id ?? targetChatId);
+    createdOrder.telegramMessageId = Number(telegramMessage.message_id) || null;
+    nextState = {
+      ...nextState,
+      orders: nextState.orders.map((order) => (order.id === createdOrder.id ? createdOrder : order)),
+    };
+    
+    writeState(nextState);
+
+    res.json({
+      ok: true,
+      isVerified,
+      telegramDeliveryOk: true,
+      createdOrder,
+      state: getPublicState(nextState),
+    });
+  } catch (error) {
+    console.error('Failed to send Telegram notification', error);
+    // If sending to Telegram fails, we still want to save the order
+    writeState(nextState);
+    
+    res.json({
+      ok: true,
+      isVerified,
+      telegramDeliveryOk: false,
+      warning: error instanceof Error ? error.message : 'Failed to send Telegram notification',
+      createdOrder,
+      state: getPublicState(nextState),
+    });
   }
-
-    try {
-      const telegramMessage = await sendTelegramMessage(
-        targetChatId,
-        formatTelegramOrderMessage(createdOrder, isVerified),
-        getOrderKeyboard(createdOrder.id),
-      );
-
-      createdOrder.telegramChatId = String(telegramMessage.chat?.id ?? targetChatId);
-      createdOrder.telegramMessageId = Number(telegramMessage.message_id) || null;
-      nextState = {
-        ...nextState,
-        orders: nextState.orders.map((order) => (order.id === createdOrder.id ? createdOrder : order)),
-      };
-      
-      writeState(nextState);
-
-      res.json({
-        ok: true,
-        isVerified,
-        telegramDeliveryOk: true,
-        createdOrder,
-        state: getPublicState(nextState),
-      });
-    } catch (error) {
-      console.error('Failed to send Telegram notification', error);
-      // We don't save state if sending fails
-      res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to send Telegram notification' });
-    }
 });
 
 app.post('/api/telegram/webhook', async (req, res) => {
