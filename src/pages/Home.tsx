@@ -113,9 +113,9 @@ export default function Home() {
   const isOverLimit = false; // Limits removed per user request
   const isCityMissing = !currentCity;
   const isCityInactive = currentCity ? !currentCity.isActive : false;
-  const isUsdtReserveInsufficient = selectedGetAsset === 'USDT' ? usdtAmount > usdtReserve : false;
+  const isUsdtReserveInsufficient = false; // Reserves limits removed globally
   const isEurInvalid = selectedGiveAsset === 'EUR_CASH' && (Number(giveAmount) % 10 !== 0 || Number(giveAmount) % 1 !== 0);
-  const isReserveBlocked = isCityMissing || isCityInactive || isUsdtReserveInsufficient;
+  const isReserveBlocked = isCityMissing || isCityInactive;
   const isValid = Number(giveAmount) > 0 && !isOverLimit && !isReserveBlocked && (!isEurInvalid || Number(giveAmount) === 0);
   
   const reserveMessage =
