@@ -773,134 +773,141 @@ app.patch('/api/admin/orders/:id', requireAdmin, async (req, res) => {
 });
 
 app.post('/api/orders', async (req, res) => {
-  console.log(`[Server] Received order request. Payload:`, JSON.stringify(req.body));
-  const orderDraft = normalizeOrderPayload(req.body?.order);
-  const telegramInitData = ensureString(req.body?.telegramInitData);
-  // #region debug-point C:order-request
-  reportDebugEvent('pre-fix', 'C', 'server.js:/api/orders', '[DEBUG] order request received', {
-    hasOrderDraft: Boolean(orderDraft),
-    cityId: req.body?.order?.cityId ?? null,
-    cityKey: req.body?.order?.cityKey ?? null,
-    giveAsset: req.body?.order?.giveAsset ?? null,
-    getAsset: req.body?.order?.getAsset ?? null,
-  });
-  // #endregion
-
-  if (!orderDraft) {
-    console.log('[Server] Validation failed: Invalid order payload. Raw body:', JSON.stringify(req.body));
-    res.status(400).json({ error: 'Invalid order payload' });
-    return;
-  }
-
-  if (!telegramInitData && requireTelegramInit) {
-    res.status(401).json({ error: 'Telegram initData is required' });
-    return;
-  }
-
-  const isVerified = telegramInitData ? verifyTelegramInitData(telegramInitData, botToken) : false;
-  if (telegramInitData && !isVerified && requireTelegramInit) {
-    res.status(401).json({ error: 'Invalid Telegram initData' });
-    return;
-  }
-
-  const telegramUser = getTelegramUserFromInitData(telegramInitData);
-  const verifiedUserId = telegramUser?.id ? String(telegramUser.id) : null;
-
-  if (isVerified && orderDraft.userId && verifiedUserId && orderDraft.userId !== verifiedUserId) {
-    res.status(403).json({ error: 'Telegram user mismatch' });
-    return;
-  }
-
-  const state = readState();
-  
-  // Добавляем фоллбек для города: если не нашли, берем первый попавшийся активный
-  let city = state.cities.find((item) => item.id === orderDraft.cityId || item.cityKey === orderDraft.cityKey);
-  if (!city && state.cities.length > 0) {
-    city = state.cities.find(c => c.isActive) || state.cities[0];
-    console.log(`[Server] City mismatch! Requested: ${orderDraft.cityId}/${orderDraft.cityKey}. Fallback to: ${city.id}/${city.cityKey}`);
-  }
-
-  if (!city) {
-    res.status(400).json({ error: 'City not found' });
-    return;
-  }
-
-  const targetChatId = fallbackChatId;
-
-  const createdOrder = {
-    ...orderDraft,
-    cityId: city.id,
-    cityKey: city.cityKey,
-    antiPhishingCode: state.antiPhishingCode,
-    id: `CB-${Date.now().toString().slice(-8)}`,
-    createdAt: new Date().toISOString(),
-    status: 'accepted',
-    telegramChatId: null,
-    telegramMessageId: null,
-  };
-
-  let nextState = applyOrderReservesOnCreate(state, createdOrder);
-
-  if (!botToken || !targetChatId) {
-    console.warn('BOT_TOKEN or CHAT_ID is missing. Order will be saved, but Telegram notification will not be sent.');
-    writeState(nextState);
-    exportToGoogleSheet(createdOrder).catch(console.error);
-    return res.json({
-      ok: true,
-      isVerified,
-      telegramDeliveryOk: false,
-      warning: 'BOT_TOKEN or CHAT_ID is missing',
-      createdOrder,
-      state: getPublicState(nextState),
-    });
-  }
-
   try {
-    const telegramMessage = await sendTelegramMessage(
-      targetChatId,
-      formatTelegramOrderMessage(createdOrder, isVerified),
-      getOrderKeyboard(createdOrder.id),
-    );
+    console.log(`[Server] Received order request. Payload:`, JSON.stringify(req.body));
+    const orderDraft = normalizeOrderPayload(req.body?.order);
+    const telegramInitData = ensureString(req.body?.telegramInitData);
+    // #region debug-point C:order-request
+    reportDebugEvent('pre-fix', 'C', 'server.js:/api/orders', '[DEBUG] order request received', {
+      hasOrderDraft: Boolean(orderDraft),
+      cityId: req.body?.order?.cityId ?? null,
+      cityKey: req.body?.order?.cityKey ?? null,
+      giveAsset: req.body?.order?.giveAsset ?? null,
+      getAsset: req.body?.order?.getAsset ?? null,
+    });
+    // #endregion
 
-    createdOrder.telegramChatId = String(telegramMessage.chat?.id ?? targetChatId);
-    createdOrder.telegramMessageId = Number(telegramMessage.message_id) || null;
-    nextState = {
-      ...nextState,
-      orders: nextState.orders.map((order) => (order.id === createdOrder.id ? createdOrder : order)),
+    if (!orderDraft) {
+      console.log('[Server] Validation failed: Invalid order payload. Raw body:', JSON.stringify(req.body));
+      res.status(400).json({ error: 'Invalid order payload' });
+      return;
+    }
+
+    if (!telegramInitData && requireTelegramInit) {
+      res.status(401).json({ error: 'Telegram initData is required' });
+      return;
+    }
+
+    const isVerified = telegramInitData ? verifyTelegramInitData(telegramInitData, botToken) : false;
+    if (telegramInitData && !isVerified && requireTelegramInit) {
+      res.status(401).json({ error: 'Invalid Telegram initData' });
+      return;
+    }
+
+    const telegramUser = getTelegramUserFromInitData(telegramInitData);
+    const verifiedUserId = telegramUser?.id ? String(telegramUser.id) : null;
+
+    if (isVerified && orderDraft.userId && verifiedUserId && orderDraft.userId !== verifiedUserId) {
+      res.status(403).json({ error: 'Telegram user mismatch' });
+      return;
+    }
+
+    const state = readState();
+    
+    // Добавляем фоллбек для города: если не нашли, берем первый попавшийся активный
+    let city = state.cities.find((item) => item.id === orderDraft.cityId || item.cityKey === orderDraft.cityKey);
+    if (!city && state.cities.length > 0) {
+      city = state.cities.find(c => c.isActive) || state.cities[0];
+      console.log(`[Server] City mismatch! Requested: ${orderDraft.cityId}/${orderDraft.cityKey}. Fallback to: ${city.id}/${city.cityKey}`);
+    }
+
+    if (!city) {
+      res.status(400).json({ error: 'City not found' });
+      return;
+    }
+
+    const targetChatId = fallbackChatId;
+
+    const createdOrder = {
+      ...orderDraft,
+      cityId: city.id,
+      cityKey: city.cityKey,
+      antiPhishingCode: state.antiPhishingCode,
+      id: `CB-${Date.now().toString().slice(-8)}`,
+      createdAt: new Date().toISOString(),
+      status: 'accepted',
+      telegramChatId: null,
+      telegramMessageId: null,
     };
-    
-    writeState(nextState);
-    
-    console.log(`[Server] Order ${createdOrder.id} saved to local state successfully`);
 
-    // Асинхронно отправляем в Google Sheets (не блокируем ответ пользователю)
-    exportToGoogleSheet(createdOrder).catch(e => console.error('[Google Sheets Error]', e));
+    console.log(`[Server] Created order before save:`, JSON.stringify(createdOrder));
 
-    return res.json({
-      ok: true,
-      isVerified,
-      telegramDeliveryOk: true,
-      createdOrder,
-      state: getPublicState(nextState),
-    });
-  } catch (error) {
-    console.error('[Server] Failed to send Telegram notification', error);
-    // If sending to Telegram fails, we still want to save the order
-    writeState(nextState);
-    
-    console.log(`[Server] Order ${createdOrder.id} saved to local state despite Telegram error`);
-    
-    // Асинхронно отправляем в Google Sheets даже если Telegram упал
-    exportToGoogleSheet(createdOrder).catch(e => console.error('[Google Sheets Error]', e));
-    
-    return res.json({
-      ok: true,
-      isVerified,
-      telegramDeliveryOk: false,
-      warning: error instanceof Error ? error.message : 'Failed to send Telegram notification',
-      createdOrder,
-      state: getPublicState(nextState),
-    });
+    let nextState = applyOrderReservesOnCreate(state, createdOrder);
+
+    if (!botToken || !targetChatId) {
+      console.warn('BOT_TOKEN or CHAT_ID is missing. Order will be saved, but Telegram notification will not be sent.');
+      writeState(nextState);
+      exportToGoogleSheet(createdOrder).catch(console.error);
+      return res.json({
+        ok: true,
+        isVerified,
+        telegramDeliveryOk: false,
+        warning: 'BOT_TOKEN or CHAT_ID is missing',
+        createdOrder,
+        state: getPublicState(nextState),
+      });
+    }
+
+    try {
+      const telegramMessage = await sendTelegramMessage(
+        targetChatId,
+        formatTelegramOrderMessage(createdOrder, isVerified),
+        getOrderKeyboard(createdOrder.id),
+      );
+
+      createdOrder.telegramChatId = String(telegramMessage.chat?.id ?? targetChatId);
+      createdOrder.telegramMessageId = Number(telegramMessage.message_id) || null;
+      nextState = {
+        ...nextState,
+        orders: nextState.orders.map((order) => (order.id === createdOrder.id ? createdOrder : order)),
+      };
+      
+      writeState(nextState);
+      
+      console.log(`[Server] Order ${createdOrder.id} saved to local state successfully`);
+
+      // Асинхронно отправляем в Google Sheets (не блокируем ответ пользователю)
+      exportToGoogleSheet(createdOrder).catch(e => console.error('[Google Sheets Error]', e));
+
+      return res.json({
+        ok: true,
+        isVerified,
+        telegramDeliveryOk: true,
+        createdOrder,
+        state: getPublicState(nextState),
+      });
+    } catch (error) {
+      console.error('[Server] Failed to send Telegram notification', error);
+      // If sending to Telegram fails, we still want to save the order
+      writeState(nextState);
+      
+      console.log(`[Server] Order ${createdOrder.id} saved to local state despite Telegram error`);
+      
+      // Асинхронно отправляем в Google Sheets даже если Telegram упал
+      exportToGoogleSheet(createdOrder).catch(e => console.error('[Google Sheets Error]', e));
+      
+      return res.json({
+        ok: true,
+        isVerified,
+        telegramDeliveryOk: false,
+        warning: error instanceof Error ? error.message : 'Failed to send Telegram notification',
+        createdOrder,
+        state: getPublicState(nextState),
+      });
+    }
+  } catch (criticalError) {
+    console.error('[Server] CRITICAL ERROR in /api/orders:', criticalError);
+    res.status(500).json({ error: criticalError instanceof Error ? criticalError.message : 'Internal Server Error' });
   }
 });
 
