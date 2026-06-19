@@ -17,7 +17,7 @@ export default function Checkout() {
   const telegramUserId = WebApp.initDataUnsafe?.user?.id ?? null;
   const { 
     cities, selectedCityId, selectedGiveAsset, selectedGetAsset, rates, usdtReserve, antiPhishingCode, checkoutPrefill, orders, profileSettings,
-    giveAmount, getAmount, clearCheckoutPrefill, setCommissionPercent, fetchInitialData
+    giveAmount, getAmount, clearCheckoutPrefill, setCommissionPercent, fetchInitialData, createOrder
   } = useStore();
   const NETWORKS = [
     { id: 'TRC-20', label: 'TRC-20', time: t('checkout.networkTimes.trc20') },
@@ -86,34 +86,43 @@ export default function Checkout() {
     let isSentSuccessfully = false;
 
     try {
+      const orderPayload = {
+        direction,
+        giveAsset: selectedGiveAsset,
+        cityId: city?.id ?? '',
+        city: cityName,
+        cityKey: city?.cityKey ?? 'berlin',
+        giveAmount,
+        giveCurrency: getAssetCurrency(selectedGiveAsset),
+        getAsset: selectedGetAsset,
+        getAmount,
+        getCurrency: getAssetCurrency(selectedGetAsset),
+        rate: effectiveRate.toFixed(4),
+        network: requiresWallet ? network : null,
+        wallet: requiresWallet ? wallet : null,
+        contact: requiresContact ? contact : null,
+        cardNumber: requiresCardNumber ? cardNumber : null,
+        userHandle,
+        userId: telegramUserId ? String(telegramUserId) : null,
+        antiPhishingCode,
+        commissionPercent: benefits.effectiveCommissionPercent,
+        discountPercent: benefits.totalDiscountPercent,
+        referralCodeUsed: benefits.hasReferralActivated ? profileSettings.activatedReferralCode : null,
+        managerName: null,
+      };
+
+      // 1. Создаем заявку ЛОКАЛЬНО сразу же, чтобы она 100% была в UI
+      const localCreatedOrder = createOrder(orderPayload);
+
+      // 2. Отправляем на сервер в фоне (или ждем, но UI уже обновлен)
       const response = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           telegramInitData,
           order: {
-            direction,
-            giveAsset: selectedGiveAsset,
-            cityId: city?.id ?? '',
-            city: cityName,
-            cityKey: city?.cityKey ?? 'berlin',
-            giveAmount,
-            giveCurrency: getAssetCurrency(selectedGiveAsset),
-            getAsset: selectedGetAsset,
-            getAmount,
-            getCurrency: getAssetCurrency(selectedGetAsset),
-            rate: effectiveRate.toFixed(4),
-            network: requiresWallet ? network : null,
-            wallet: requiresWallet ? wallet : null,
-            contact: requiresContact ? contact : null,
-            cardNumber: requiresCardNumber ? cardNumber : null,
-            userHandle,
-            userId: telegramUserId,
-            antiPhishingCode,
-            commissionPercent: benefits.effectiveCommissionPercent,
-            discountPercent: benefits.totalDiscountPercent,
-            referralCodeUsed: benefits.hasReferralActivated ? profileSettings.activatedReferralCode : null,
-            managerName: null,
+            ...orderPayload,
+            id: localCreatedOrder.id // Передаем сгенерированный ID на сервер, чтобы они совпали
           },
         }),
       });
@@ -136,11 +145,8 @@ export default function Checkout() {
           ...responseData.state,
           isLoading: false,
         }));
-      } else {
-        await fetchInitialData();
       }
 
-      const createdOrder = responseData?.createdOrder;
       isSentSuccessfully = true;
 
       // Add a slight delay to allow state to settle
@@ -151,7 +157,7 @@ export default function Checkout() {
 
         navigate('/orders', {
           state: {
-            orderId: createdOrder?.id ?? null,
+            orderId: localCreatedOrder.id,
             justCreated: true,
           },
         });

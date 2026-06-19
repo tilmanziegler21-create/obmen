@@ -14,8 +14,8 @@ const distDir = path.join(__dirname, 'dist');
 const dataDir = path.join(__dirname, 'data');
 const statePath = path.join(dataDir, 'state.json');
 
-const botToken = process.env.BOT_TOKEN || process.env.VITE_BOT_TOKEN || '';
-const fallbackChatId = process.env.CHAT_ID || process.env.VITE_CHAT_ID || '';
+const botToken = (process.env.BOT_TOKEN || process.env.VITE_BOT_TOKEN || '').trim();
+const fallbackChatId = (process.env.CHAT_ID || process.env.VITE_CHAT_ID || '').trim();
 const publicBaseUrl = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
 const requireTelegramInit = process.env.REQUIRE_TELEGRAM_INIT === 'true';
 const adminIds = new Set(
@@ -362,6 +362,7 @@ function normalizeOrderPayload(payload) {
   }
 
   return {
+    id: ensureString(payload.id) || null,
     direction,
     giveAsset: ensureString(payload.giveAsset) || (ensureString(payload.giveCurrency) === 'USDT' ? 'USDT' : ensureString(payload.giveCurrency) === 'UAH' ? 'UAH_CARD' : 'EUR_CASH'),
     cityId: ensureString(payload.cityId),
@@ -833,7 +834,7 @@ app.post('/api/orders', async (req, res) => {
       cityId: city.id,
       cityKey: city.cityKey,
       antiPhishingCode: state.antiPhishingCode,
-      id: `CB-${Date.now().toString().slice(-8)}`,
+      id: orderDraft.id || `CB-${Date.now().toString().slice(-8)}`,
       createdAt: new Date().toISOString(),
       status: 'accepted',
       telegramChatId: null,
