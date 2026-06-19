@@ -265,8 +265,11 @@ function getPublicState(state) {
 
 async function exportToGoogleSheet(order) {
   const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
-  // Обрабатываем экранированные переносы строк в приватном ключе
-  const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  // Обрабатываем экранированные переносы строк и возможные кавычки в приватном ключе
+  let privateKey = process.env.GOOGLE_PRIVATE_KEY;
+  if (privateKey) {
+    privateKey = privateKey.replace(/^"|"$/g, '').replace(/\\n/g, '\n');
+  }
   const spreadsheetId = process.env.SPREADSHEET_ID;
 
   if (!clientEmail || !privateKey || !spreadsheetId) {
@@ -301,7 +304,9 @@ async function exportToGoogleSheet(order) {
 
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: 'orders!A:J',
+      // Указываем просто столбцы, чтобы Google сам нашел первый лист, 
+      // независимо от того, как он называется (Лист1, Sheet1, orders и т.д.)
+      range: 'A:J',
       valueInputOption: 'USER_ENTERED',
       requestBody: { values },
     });
