@@ -90,7 +90,6 @@ export default function Checkout() {
         direction,
         giveAsset: selectedGiveAsset,
         cityId: city?.id ?? '',
-        city: cityName,
         cityKey: city?.cityKey ?? 'berlin',
         giveAmount,
         giveCurrency: getAssetCurrency(selectedGiveAsset),
@@ -114,42 +113,7 @@ export default function Checkout() {
       // 1. Создаем заявку ЛОКАЛЬНО сразу же, чтобы она 100% была в UI
       const localCreatedOrder = createOrder(orderPayload);
 
-      // 2. Отправляем на сервер в фоне (или ждем, но UI уже обновлен)
-      const response = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          telegramInitData,
-          order: {
-            ...orderPayload,
-            id: localCreatedOrder.id // Передаем сгенерированный ID на сервер, чтобы они совпали
-          },
-        }),
-      });
-
-      const responseData = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        const message =
-          responseData && typeof responseData.error === 'string'
-            ? responseData.error
-            : t('checkout.unknownUser');
-        setSubmitError(t('checkout.telegramApiError', { message }));
-        setIsSubmitting(false);
-        return;
-      }
-
-      if (responseData?.state) {
-        useStore.setState((state) => ({
-          ...state,
-          ...responseData.state,
-          isLoading: false,
-        }));
-      }
-
-      isSentSuccessfully = true;
-
-      // Add a slight delay to allow state to settle
+      // Не ждем ответа сервера для редиректа! Пользователь сразу видит результат.
       setTimeout(() => {
         WebApp.HapticFeedback.notificationOccurred('success');
         clearCheckoutPrefill();
@@ -161,7 +125,30 @@ export default function Checkout() {
             justCreated: true,
           },
         });
-      }, 500);
+      }, 100);
+
+      // 2. Отправляем на сервер в фоне
+      fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          telegramInitData,
+          order: {
+            ...orderPayload,
+            id: localCreatedOrder.id
+          },
+        }),
+      }).then(async (response) => {
+        const responseData = await response.json().catch(() => null);
+        if (response.ok && responseData?.state) {
+          useStore.setState((state) => ({
+            ...state,
+            ...responseData.state,
+            isLoading: false,
+          }));
+        }
+      }).catch(console.error);
+      
     } catch (e) {
       console.error('Ошибка при отправке в backend:', e);
       setSubmitError(
