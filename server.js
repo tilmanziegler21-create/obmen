@@ -798,7 +798,8 @@ app.post('/api/orders', async (req, res) => {
   if (!botToken || !targetChatId) {
     console.warn('BOT_TOKEN or CHAT_ID is missing. Order will be saved, but Telegram notification will not be sent.');
     writeState(nextState);
-    res.json({
+    exportToGoogleSheet(createdOrder).catch(console.error);
+    return res.json({
       ok: true,
       isVerified,
       telegramDeliveryOk: false,
@@ -806,7 +807,6 @@ app.post('/api/orders', async (req, res) => {
       createdOrder,
       state: getPublicState(nextState),
     });
-    return;
   }
 
   try {
@@ -828,7 +828,7 @@ app.post('/api/orders', async (req, res) => {
     // Асинхронно отправляем в Google Sheets (не блокируем ответ пользователю)
     exportToGoogleSheet(createdOrder).catch(console.error);
 
-    res.json({
+    return res.json({
       ok: true,
       isVerified,
       telegramDeliveryOk: true,
@@ -843,7 +843,7 @@ app.post('/api/orders', async (req, res) => {
     // Асинхронно отправляем в Google Sheets даже если Telegram упал
     exportToGoogleSheet(createdOrder).catch(console.error);
     
-    res.json({
+    return res.json({
       ok: true,
       isVerified,
       telegramDeliveryOk: false,
