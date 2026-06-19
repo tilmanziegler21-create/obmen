@@ -828,6 +828,9 @@ app.post('/api/orders', async (req, res) => {
     }
 
     const targetChatId = fallbackChatId;
+    if (!targetChatId) {
+      console.log(`[Server] Missing CHAT_ID in environment variables!`);
+    }
 
     const createdOrder = {
       ...orderDraft,
@@ -868,10 +871,14 @@ app.post('/api/orders', async (req, res) => {
 
       createdOrder.telegramChatId = String(telegramMessage.chat?.id ?? targetChatId);
       createdOrder.telegramMessageId = Number(telegramMessage.message_id) || null;
-      nextState = {
-        ...nextState,
-        orders: nextState.orders.map((order) => (order.id === createdOrder.id ? createdOrder : order)),
-      };
+      
+      // ИЩЕМ заявку в nextState.orders и обновляем ее (а не просто мапим)
+      const existingOrderIndex = nextState.orders.findIndex(o => o.id === createdOrder.id);
+      if (existingOrderIndex !== -1) {
+        nextState.orders[existingOrderIndex] = createdOrder;
+      } else {
+        nextState.orders = [createdOrder, ...nextState.orders];
+      }
       
       writeState(nextState);
       
