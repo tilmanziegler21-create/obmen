@@ -47,6 +47,12 @@ function reportDebugEvent(runId, hypothesisId, location, msg, data = {}) {
 
 app.use(express.json({ limit: '256kb' }));
 
+// Глобальный логгер всех запросов для отладки
+app.use((req, res, next) => {
+  console.log(`[HTTP] ${req.method} ${req.url}`);
+  next();
+});
+
 function buildTelegramSecret(botTokenValue) {
   return crypto.createHmac('sha256', 'WebAppData').update(botTokenValue).digest();
 }

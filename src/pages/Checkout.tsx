@@ -65,6 +65,19 @@ export default function Checkout() {
       setSubmitError(t('checkout.reserveError'));
       return;
     }
+    
+    if (!isValid) {
+      if (requiresWallet && wallet.length <= 10) {
+        setSubmitError('Введите корректный кошелек (минимум 10 символов)');
+      } else if (requiresContact && contact.length <= 2) {
+        setSubmitError('Введите корректный контакт');
+      } else if (requiresCardNumber && cardNumber.replace(/\s+/g, '').length < 12) {
+        setSubmitError('Введите корректный номер карты');
+      } else {
+        setSubmitError('Заполните все обязательные поля');
+      }
+      return;
+    }
 
     WebApp.HapticFeedback.impactOccurred('heavy');
     setIsSubmitting(true);
@@ -328,9 +341,9 @@ export default function Checkout() {
         )}
         <button
           onClick={handleSubmit}
-          disabled={!isValid || isSubmitting || isReserveBlocked}
+          disabled={isSubmitting || isReserveBlocked}
           className={`w-full p-[18px] border-none rounded-r2 font-sans text-[15px] font-[700] cursor-pointer transition-all tracking-[0.02em] flex items-center justify-center gap-[8px] relative overflow-hidden active:scale-[0.985] disabled:opacity-35 disabled:cursor-not-allowed disabled:transform-none ${
-            isValid ? 'bg-[#00CC66] text-[#000000]' : 'bg-bg3 text-muted'
+            isValid ? 'bg-[#00CC66] text-[#000000]' : 'bg-[#00CC66] text-[#000000] opacity-80'
           }`}
         >
           {isSubmitting ? (
