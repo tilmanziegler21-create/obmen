@@ -268,12 +268,23 @@ async function exportToGoogleSheet(order) {
   // Обрабатываем экранированные переносы строк и возможные кавычки в приватном ключе
   let privateKey = process.env.GOOGLE_PRIVATE_KEY;
   if (privateKey) {
-    privateKey = privateKey.replace(/^"|"$/g, '').replace(/\\n/g, '\n');
+    // Поддержка любых вариаций переносов: \n, \\n, /n, \/n
+    privateKey = privateKey
+      .replace(/^"|"$/g, '')
+      .replace(/\\n/g, '\n')
+      .replace(/\/n/g, '\n')
+      .replace(/\\\n/g, '\n')
+      .replace(/\s+BEGIN/g, ' BEGIN')
+      .replace(/END\s+/g, 'END ');
   }
   const spreadsheetId = process.env.SPREADSHEET_ID;
 
   console.log(`[Google Sheets] Starting export for order ${order.id}`);
   console.log(`[Google Sheets] Credentials check: Email: ${!!clientEmail}, Key: ${!!privateKey}, SheetID: ${!!spreadsheetId}`);
+  if (privateKey) {
+    console.log(`[Google Sheets] Key prefix: ${privateKey.substring(0, 35)}... Key suffix: ...${privateKey.substring(privateKey.length - 30)}`);
+    console.log(`[Google Sheets] Key contains actual newlines: ${privateKey.includes('\n')}`);
+  }
 
   if (!clientEmail || !privateKey || !spreadsheetId) {
     console.log('[Google Sheets] Missing credentials. Skip export.');
@@ -753,6 +764,7 @@ app.patch('/api/admin/orders/:id', requireAdmin, async (req, res) => {
 });
 
 app.post('/api/orders', async (req, res) => {
+  console.log(`[Server] Received order request. Payload:`, JSON.stringify(req.body));
   const orderDraft = normalizeOrderPayload(req.body?.order);
   const telegramInitData = ensureString(req.body?.telegramInitData);
   // #region debug-point C:order-request
