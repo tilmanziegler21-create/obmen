@@ -294,7 +294,6 @@ async function exportToGoogleSheet(order) {
         `${order.getAmount} ${order.getCurrency}`,
         order.rate,
         order.userHandle,
-        order.contact || '',
         order.wallet || '',
         order.status
       ]
@@ -302,7 +301,7 @@ async function exportToGoogleSheet(order) {
 
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: 'orders!A:K',
+      range: 'orders!A:J',
       valueInputOption: 'USER_ENTERED',
       requestBody: { values },
     });
