@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
+import { google } from 'googleapis';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -263,29 +264,49 @@ function getPublicState(state) {
 }
 
 async function exportToGoogleSheet(order) {
-  const scriptUrl = process.env.GOOGLE_SCRIPT_URL;
-  if (!scriptUrl) return;
+  const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
+  // Обрабатываем экранированные переносы строк в приватном ключе
+  const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  const spreadsheetId = process.env.SPREADSHEET_ID;
+
+  if (!clientEmail || !privateKey || !spreadsheetId) {
+    console.log('[Google Sheets] Missing credentials. Skip export.');
+    return;
+  }
   
   try {
-    const payload = {
-      id: order.id,
-      date: new Date(order.createdAt).toLocaleString('ru-RU', { timeZone: 'Europe/Berlin' }),
-      direction: order.direction === 'GIVE_CASH' ? 'Наличные -> USDT' : 'USDT -> Наличные',
-      city: order.cityKey,
-      give: `${order.giveAmount} ${order.giveCurrency}`,
-      get: `${order.getAmount} ${order.getCurrency}`,
-      rate: order.rate,
-      client: order.userHandle,
-      contact: order.contact || '',
-      wallet: order.wallet || '',
-      status: order.status
-    };
+    const auth = new google.auth.JWT(
+      clientEmail,
+      null,
+      privateKey,
+      ['https://www.googleapis.com/auth/spreadsheets']
+    );
 
-    await fetch(scriptUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+    const sheets = google.sheets({ version: 'v4', auth });
+
+    const values = [
+      [
+        order.id,
+        new Date(order.createdAt).toLocaleString('ru-RU', { timeZone: 'Europe/Berlin' }),
+        order.direction === 'GIVE_CASH' ? 'Наличные -> USDT' : 'USDT -> Наличные',
+        order.cityKey,
+        `${order.giveAmount} ${order.giveCurrency}`,
+        `${order.getAmount} ${order.getCurrency}`,
+        order.rate,
+        order.userHandle,
+        order.contact || '',
+        order.wallet || '',
+        order.status
+      ]
+    ];
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: 'orders!A:K',
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values },
     });
+
     console.log(`[Google Sheets] Order ${order.id} exported successfully`);
   } catch (err) {
     console.error(`[Google Sheets] Failed to export order ${order.id}:`, err.message);
