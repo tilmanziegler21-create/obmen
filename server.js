@@ -272,12 +272,16 @@ async function exportToGoogleSheet(order) {
   }
   const spreadsheetId = process.env.SPREADSHEET_ID;
 
+  console.log(`[Google Sheets] Starting export for order ${order.id}`);
+  console.log(`[Google Sheets] Credentials check: Email: ${!!clientEmail}, Key: ${!!privateKey}, SheetID: ${!!spreadsheetId}`);
+
   if (!clientEmail || !privateKey || !spreadsheetId) {
     console.log('[Google Sheets] Missing credentials. Skip export.');
     return;
   }
   
   try {
+    console.log('[Google Sheets] Authenticating...');
     const auth = new google.auth.JWT(
       clientEmail,
       null,
@@ -302,6 +306,7 @@ async function exportToGoogleSheet(order) {
       ]
     ];
 
+    console.log('[Google Sheets] Appending data to sheet...');
     await sheets.spreadsheets.values.append({
       spreadsheetId,
       // Указываем просто столбцы, чтобы Google сам нашел первый лист, 
@@ -313,7 +318,7 @@ async function exportToGoogleSheet(order) {
 
     console.log(`[Google Sheets] Order ${order.id} exported successfully`);
   } catch (err) {
-    console.error(`[Google Sheets] Failed to export order ${order.id}:`, err.message);
+    console.error(`[Google Sheets] Failed to export order ${order.id}:`, err);
   }
 }
 
@@ -394,15 +399,23 @@ function formatDirection(order) {
   return `${left} -> ${right}`;
 }
 
+function escapeHtml(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 function formatTelegramOrderMessage(order, isVerified) {
   const routeDetails = [
-    order.network ? `🔗 <b>Сеть:</b> ${order.network}` : null,
-    order.wallet ? `💼 <b>Кошелек:</b> <code>${order.wallet}</code>` : null,
-    order.cardNumber ? `💳 <b>Карта UAH:</b> <code>${order.cardNumber}</code>` : null,
-    order.contact ? `📱 <b>Контакт:</b> ${order.contact}` : null,
+    order.network ? `🔗 <b>Сеть:</b> ${escapeHtml(order.network)}` : null,
+    order.wallet ? `💼 <b>Кошелек:</b> <code>${escapeHtml(order.wallet)}</code>` : null,
+    order.cardNumber ? `💳 <b>Карта UAH:</b> <code>${escapeHtml(order.cardNumber)}</code>` : null,
+    order.contact ? `📱 <b>Контакт:</b> ${escapeHtml(order.contact)}` : null,
   ].filter(Boolean).join('\n');
   const verificationLabel = isVerified ? 'verified' : 'not verified';
-  const referralLabel = order.referralCodeUsed ? order.referralCodeUsed : 'none';
+  const referralLabel = order.referralCodeUsed ? escapeHtml(order.referralCodeUsed) : 'none';
 
   return `
 🚨 <b>Новая заявка на обмен</b>
@@ -410,7 +423,7 @@ function formatTelegramOrderMessage(order, isVerified) {
 #${order.id}
 📍 <b>Статус:</b> ${formatStatus(order.status)}
 🔄 <b>Направление:</b> ${formatDirection(order)}
-🏙 <b>Город:</b> ${order.cityKey}
+🏙 <b>Город:</b> ${escapeHtml(order.cityKey)}
 💰 <b>Отдают:</b> ${order.giveAmount} ${order.giveCurrency}
 💸 <b>Получают:</b> ${order.getAmount} ${order.getCurrency}
 📊 <b>Курс клиента:</b> 1 ${formatAssetLabel(order.giveAsset, order.giveCurrency)} = ${order.rate} ${order.getCurrency}
@@ -420,9 +433,9 @@ function formatTelegramOrderMessage(order, isVerified) {
 
 ${routeDetails}
 
-🛡 <b>Anti-Phishing:</b> <code>${order.antiPhishingCode}</code>
-👤 <b>Клиент:</b> ${order.userHandle}
-👨‍💼 <b>Менеджер:</b> ${order.managerName ?? '-'}
+🛡 <b>Anti-Phishing:</b> <code>${escapeHtml(order.antiPhishingCode)}</code>
+👤 <b>Клиент:</b> ${escapeHtml(order.userHandle)}
+👨‍💼 <b>Менеджер:</b> ${escapeHtml(order.managerName ?? '-')}
 ✅ <b>Telegram initData:</b> ${verificationLabel}
   `.trim();
 }
@@ -830,8 +843,10 @@ app.post('/api/orders', async (req, res) => {
     
     writeState(nextState);
     
+    console.log(`[Server] Order ${createdOrder.id} saved to local state successfully`);
+
     // Асинхронно отправляем в Google Sheets (не блокируем ответ пользователю)
-    exportToGoogleSheet(createdOrder).catch(console.error);
+    exportToGoogleSheet(createdOrder).catch(e => console.error('[Google Sheets Error]', e));
 
     return res.json({
       ok: true,
@@ -841,12 +856,14 @@ app.post('/api/orders', async (req, res) => {
       state: getPublicState(nextState),
     });
   } catch (error) {
-    console.error('Failed to send Telegram notification', error);
+    console.error('[Server] Failed to send Telegram notification', error);
     // If sending to Telegram fails, we still want to save the order
     writeState(nextState);
     
+    console.log(`[Server] Order ${createdOrder.id} saved to local state despite Telegram error`);
+    
     // Асинхронно отправляем в Google Sheets даже если Telegram упал
-    exportToGoogleSheet(createdOrder).catch(console.error);
+    exportToGoogleSheet(createdOrder).catch(e => console.error('[Google Sheets Error]', e));
     
     return res.json({
       ok: true,
