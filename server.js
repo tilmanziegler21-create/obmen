@@ -14,8 +14,8 @@ const distDir = path.join(__dirname, 'dist');
 const dataDir = path.join(__dirname, 'data');
 const statePath = path.join(dataDir, 'state.json');
 
-const botToken = (process.env.BOT_TOKEN || process.env.VITE_BOT_TOKEN || '').trim();
-const fallbackChatId = (process.env.CHAT_ID || process.env.VITE_CHAT_ID || '').trim();
+const botToken = (process.env.VITE_BOT_TOKEN || process.env.BOT_TOKEN || '').trim();
+const fallbackChatId = (process.env.VITE_CHAT_ID || process.env.CHAT_ID || '').trim();
 const publicBaseUrl = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
 const requireTelegramInit = process.env.REQUIRE_TELEGRAM_INIT === 'true';
 const adminIds = new Set(
