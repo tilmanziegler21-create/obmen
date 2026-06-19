@@ -350,11 +350,14 @@ function normalizeOrderPayload(payload) {
       : payload.direction === 'GIVE_CASH'
         ? 'GIVE_CASH'
         : null;
-  const giveAmount = ensureString(payload.giveAmount);
-  const getAmount = ensureString(payload.getAmount);
-  const rate = ensureString(payload.rate);
+  
+  // Допускаем пустые amount на этапе парсинга, чтобы не откидывать заявку тихо
+  const giveAmount = ensureString(payload.giveAmount) || '0';
+  const getAmount = ensureString(payload.getAmount) || '0';
+  const rate = ensureString(payload.rate) || '1.00';
 
-  if (!direction || !giveAmount || !getAmount || !rate) {
+  if (!direction) {
+    console.log('[Server] Invalid payload direction:', payload.direction);
     return null;
   }
 
@@ -784,6 +787,7 @@ app.post('/api/orders', async (req, res) => {
   // #endregion
 
   if (!orderDraft) {
+    console.log('[Server] Validation failed: Invalid order payload. Raw body:', JSON.stringify(req.body));
     res.status(400).json({ error: 'Invalid order payload' });
     return;
   }
@@ -808,7 +812,13 @@ app.post('/api/orders', async (req, res) => {
   }
 
   const state = readState();
-  const city = state.cities.find((item) => item.id === orderDraft.cityId || item.cityKey === orderDraft.cityKey);
+  
+  // Добавляем фоллбек для города: если не нашли, берем первый попавшийся активный
+  let city = state.cities.find((item) => item.id === orderDraft.cityId || item.cityKey === orderDraft.cityKey);
+  if (!city && state.cities.length > 0) {
+    city = state.cities.find(c => c.isActive) || state.cities[0];
+    console.log(`[Server] City mismatch! Requested: ${orderDraft.cityId}/${orderDraft.cityKey}. Fallback to: ${city.id}/${city.cityKey}`);
+  }
 
   if (!city) {
     res.status(400).json({ error: 'City not found' });
