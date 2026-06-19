@@ -262,6 +262,36 @@ function getPublicState(state) {
   };
 }
 
+async function exportToGoogleSheet(order) {
+  const scriptUrl = process.env.GOOGLE_SCRIPT_URL;
+  if (!scriptUrl) return;
+  
+  try {
+    const payload = {
+      id: order.id,
+      date: new Date(order.createdAt).toLocaleString('ru-RU', { timeZone: 'Europe/Berlin' }),
+      direction: order.direction === 'GIVE_CASH' ? 'Наличные -> USDT' : 'USDT -> Наличные',
+      city: order.cityKey,
+      give: `${order.giveAmount} ${order.giveCurrency}`,
+      get: `${order.getAmount} ${order.getCurrency}`,
+      rate: order.rate,
+      client: order.userHandle,
+      contact: order.contact || '',
+      wallet: order.wallet || '',
+      status: order.status
+    };
+
+    await fetch(scriptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    console.log(`[Google Sheets] Order ${order.id} exported successfully`);
+  } catch (err) {
+    console.error(`[Google Sheets] Failed to export order ${order.id}:`, err.message);
+  }
+}
+
 function normalizeOrderPayload(payload) {
   if (!payload || typeof payload !== 'object') {
     return null;
@@ -774,6 +804,9 @@ app.post('/api/orders', async (req, res) => {
     };
     
     writeState(nextState);
+    
+    // Асинхронно отправляем в Google Sheets (не блокируем ответ пользователю)
+    exportToGoogleSheet(createdOrder).catch(console.error);
 
     res.json({
       ok: true,
@@ -786,6 +819,9 @@ app.post('/api/orders', async (req, res) => {
     console.error('Failed to send Telegram notification', error);
     // If sending to Telegram fails, we still want to save the order
     writeState(nextState);
+    
+    // Асинхронно отправляем в Google Sheets даже если Telegram упал
+    exportToGoogleSheet(createdOrder).catch(console.error);
     
     res.json({
       ok: true,
