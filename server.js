@@ -539,6 +539,18 @@ async function editTelegramMessage(order, isVerified) {
     return;
   }
 
+  if (order.status === 'rejected') {
+    try {
+      await callTelegram('deleteMessage', {
+        chat_id: order.telegramChatId,
+        message_id: order.telegramMessageId,
+      });
+    } catch (e) {
+      console.error('[Telegram API] Failed to delete message:', e.message);
+    }
+    return;
+  }
+
   await callTelegram('editMessageText', {
     chat_id: order.telegramChatId,
     message_id: order.telegramMessageId,
