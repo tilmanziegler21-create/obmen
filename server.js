@@ -438,8 +438,13 @@ function formatTelegramOrderMessage(order, isVerified) {
   const verificationLabel = isVerified ? 'verified' : 'not verified';
   const referralLabel = order.referralCodeUsed ? escapeHtml(order.referralCodeUsed) : 'none';
 
+  let headerText = '🚨 <b>Новая заявка на обмен</b>';
+  if (order.status === 'processing') headerText = '⏳ <b>Заявка в работе</b>';
+  if (order.status === 'ready') headerText = '✅ <b>Заявка успешно выполнена</b>';
+  if (order.status === 'rejected') headerText = '❌ <b>Заявка отклонена</b>';
+
   return `
-🚨 <b>Новая заявка на обмен</b>
+${headerText}
 
 #${order.id}
 📍 <b>Статус:</b> ${formatStatus(order.status)}
@@ -461,14 +466,24 @@ ${routeDetails}
   `.trim();
 }
 
-function getOrderKeyboard(orderId) {
+function getOrderKeyboard(order) {
+  if (order.status === 'ready' || order.status === 'rejected') {
+    return { inline_keyboard: [] };
+  }
+
+  if (order.status === 'processing') {
+    return {
+      inline_keyboard: [
+        [{ text: '✅ Готово', callback_data: `order:${order.id}:ready` }],
+        [{ text: '❌ Отклонить', callback_data: `order:${order.id}:rejected` }],
+      ],
+    };
+  }
+
   return {
     inline_keyboard: [
-      [
-        { text: 'В работу', callback_data: `order:${orderId}:processing` },
-        { text: 'Готово', callback_data: `order:${orderId}:ready` },
-      ],
-      [{ text: 'Отклонить', callback_data: `order:${orderId}:rejected` }],
+      [{ text: '⏳ В работу', callback_data: `order:${order.id}:processing` }],
+      [{ text: '❌ Отклонить', callback_data: `order:${order.id}:rejected` }],
     ],
   };
 }
@@ -529,7 +544,7 @@ async function editTelegramMessage(order, isVerified) {
     message_id: order.telegramMessageId,
     text: formatTelegramOrderMessage(order, isVerified),
     parse_mode: 'HTML',
-    reply_markup: getOrderKeyboard(order.id),
+    reply_markup: getOrderKeyboard(order),
   });
 }
 
@@ -866,7 +881,7 @@ app.post('/api/orders', async (req, res) => {
       const telegramMessage = await sendTelegramMessage(
         targetChatId,
         formatTelegramOrderMessage(createdOrder, isVerified),
-        getOrderKeyboard(createdOrder.id),
+        getOrderKeyboard(createdOrder),
       );
 
       createdOrder.telegramChatId = String(telegramMessage.chat?.id ?? targetChatId);
