@@ -87,6 +87,7 @@ export interface ExchangeState {
   orders: ExchangeOrder[];
   usdtReserve: number;
   antiPhishingCode: string;
+  supportLink: string;
   profileSettings: ProfileSettings;
   commissionPercent: number;
   checkoutPrefill: CheckoutPrefill;
@@ -110,6 +111,7 @@ export interface ExchangeState {
   updateUsdtReserve: (amount: number) => Promise<void>;
   updateRate: (rate: number) => Promise<void>;
   updateAntiPhishingCode: (code: string) => Promise<void>;
+  updateSupportLink: (link: string) => Promise<void>;
   updateProfileSettings: (settings: Partial<ProfileSettings>) => void;
   setCommissionPercent: (value: number) => void;
   toggleCityActive: (id: string) => Promise<void>;

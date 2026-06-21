@@ -16,7 +16,7 @@ export default function Orders() {
   const navigate = useNavigate();
   const location = useLocation();
   const { t, language } = useI18n();
-  const { orders, profileSettings, applyOrderTemplate } = useStore();
+  const { orders, profileSettings, supportLink, applyOrderTemplate } = useStore();
   const user = WebApp.initDataUnsafe?.user;
   const currentUserId = user?.id ? String(user.id) : null;
   const currentUserHandle = user?.username ? `@${user.username}` : (user?.first_name || t('checkout.unknownUser'));
@@ -44,7 +44,7 @@ export default function Orders() {
   };
 
   const handleOpenManagerContact = () => {
-    const rawValue = profileSettings.managerContact.trim();
+    const rawValue = supportLink.trim();
     if (!rawValue) {
       return;
     }
@@ -119,7 +119,7 @@ export default function Orders() {
               <button
                 type="button"
                 onClick={handleOpenManagerContact}
-                disabled={!profileSettings.managerContact.trim()}
+                disabled={!supportLink.trim()}
                 className="flex-1 rounded-[12px] bg-[#00CC66] px-[14px] py-[12px] text-[12px] font-[600] text-[#000000] transition-opacity hover:opacity-90 disabled:bg-[#1A1A1A] disabled:text-[#808080]"
               >
                 {t('orders.contactManager')}

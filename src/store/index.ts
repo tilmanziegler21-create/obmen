@@ -8,7 +8,7 @@ import { getAllowedTargetAssets, getDefaultTargetAsset, getDirectionFromGiveAsse
 
 type SharedServerState = Pick<
   ExchangeState,
-  'cities' | 'rates' | 'rateUpdatedAt' | 'orders' | 'usdtReserve' | 'antiPhishingCode'
+  'cities' | 'rates' | 'rateUpdatedAt' | 'orders' | 'usdtReserve' | 'antiPhishingCode' | 'supportLink'
 >;
 
 async function readJsonResponse<T>(response: Response): Promise<T | null> {
@@ -66,6 +66,7 @@ export const useStore = create<ExchangeState>()(
       orders: [],
       usdtReserve: 2500,
       antiPhishingCode: DEFAULT_ANTI_PHISHING_CODE,
+      supportLink: 'cryptobull_manager',
       profileSettings: DEFAULT_PROFILE_SETTINGS,
       commissionPercent: 4,
       checkoutPrefill: DEFAULT_CHECKOUT_PREFILL,
@@ -236,6 +237,26 @@ export const useStore = create<ExchangeState>()(
           }
         } catch (error) {
           console.error('Failed to update anti-phishing code', error);
+        }
+      },
+
+      updateSupportLink: async (link) => {
+        try {
+          const response = await fetch('/api/admin/settings', {
+            method: 'PATCH',
+            headers: { 
+              'Content-Type': 'application/json',
+              'X-Telegram-Init-Data': WebApp.initData || '',
+            },
+            body: JSON.stringify({ supportLink: link.trim() || 'cryptobull_manager' }),
+          });
+          const data = await readJsonResponse<{ state: SharedServerState }>(response);
+
+          if (response.ok && data?.state) {
+            set({ ...data.state });
+          }
+        } catch (error) {
+          console.error('Failed to update support link', error);
         }
       },
 
@@ -486,6 +507,7 @@ export const useStore = create<ExchangeState>()(
         orders: state.orders,
         usdtReserve: state.usdtReserve,
         antiPhishingCode: state.antiPhishingCode,
+        supportLink: state.supportLink,
         profileSettings: state.profileSettings,
       }),
       migrate: (persistedState) => {
@@ -495,6 +517,7 @@ export const useStore = create<ExchangeState>()(
           usdtReserve?: number;
           rateUpdatedAt?: string;
           antiPhishingCode?: string;
+          supportLink?: string;
           profileSettings?: Partial<ExchangeState['profileSettings']>;
         };
 
@@ -521,6 +544,7 @@ export const useStore = create<ExchangeState>()(
           },
           rateUpdatedAt: state.rateUpdatedAt ?? new Date().toISOString(),
           antiPhishingCode: state.antiPhishingCode ?? DEFAULT_ANTI_PHISHING_CODE,
+          supportLink: state.supportLink ?? 'cryptobull_manager',
           profileSettings: {
             ...DEFAULT_PROFILE_SETTINGS,
             ...(state.profileSettings ?? {}),

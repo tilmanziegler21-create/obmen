@@ -9,6 +9,14 @@ import { calculateCustomerMetrics, getCustomerBenefits, isOrderOwnedByUser } fro
 import { getAllowedTargetAssets, getAssetCurrency, getAssetLabel, getRouteLabel } from '../lib/exchangeAssets';
 import { getAssetConversionRate } from '../lib/rates';
 
+const MOCK_REVIEWS = [
+  { id: 1, name: 'Alex M.', text: 'Быстрый обмен в Берлине, курьер приехал вовремя. Рекомендую!', rating: 5, date: '19.06.2026' },
+  { id: 2, name: 'Dmitry', text: 'Менял USDT на налик, курс отличный. Все четко и без лишних вопросов.', rating: 5, date: '18.06.2026' },
+  { id: 3, name: 'Sergey', text: 'Все супер, спасибо менеджеру за помощь с выбором сети.', rating: 5, date: '15.06.2026' },
+  { id: 4, name: 'Elena', text: 'Первый раз пользовалась сервисом, очень переживала, но зря! Деньги получила через 15 минут.', rating: 5, date: '12.06.2026' },
+  { id: 5, name: 'Maxim K.', text: 'Круто, что можно зафиксировать курс. Менял крупную сумму, все прошло гладко.', rating: 5, date: '10.06.2026' },
+];
+
 function AssetIcon({ asset }: { asset: 'EUR_CASH' | 'UAH_CARD' | 'USDT' }) {
   if (asset === 'EUR_CASH') {
     return (
@@ -51,6 +59,7 @@ export default function Home() {
     selectedGetAsset,
     giveAmount,
     getAmount,
+    supportLink,
     setCity,
     setGiveAmount,
     setGiveAsset,
@@ -66,6 +75,7 @@ export default function Home() {
   const [isReferralCopied, setIsReferralCopied] = useState(false);
   const [citySearch, setCitySearch] = useState('');
   const [activeAssetSheet, setActiveAssetSheet] = useState<'give' | 'get' | null>(null);
+  const [isReviewsOpen, setIsReviewsOpen] = useState(false);
   const [isAmountConfirmed, setIsAmountConfirmed] = useState(false);
   const [isCityPickerOpen, setIsCityPickerOpen] = useState(!selectedCityId);
 
@@ -134,7 +144,7 @@ export default function Home() {
 
   const handleOpenSupport = () => {
     WebApp.HapticFeedback.impactOccurred('light');
-    WebApp.openTelegramLink('https://t.me/cryptobull_manager');
+    WebApp.openTelegramLink(`https://t.me/${supportLink}`);
   };
 
   const handleCopyReferralCode = async () => {
@@ -286,7 +296,13 @@ export default function Home() {
               <div className="mb-[4px] text-[16px]">⭐</div>
               <div className="text-[11px] font-[600] text-[#FFFFFF]">{t('home.ratingLabel')}</div>
             </div>
-            <div className="flex flex-1 flex-col items-center justify-center rounded-[16px] bg-[#111111] p-[12px] text-center">
+            <div 
+              onClick={() => {
+                WebApp.HapticFeedback.impactOccurred('light');
+                setIsReviewsOpen(true);
+              }}
+              className="flex flex-1 flex-col items-center justify-center rounded-[16px] bg-[#111111] p-[12px] text-center cursor-pointer transition-colors hover:bg-[#1A1A1A] active:bg-[#222222]"
+            >
               <div className="mb-[4px] text-[16px]">🛡️</div>
               <div className="text-[11px] font-[600] text-[#FFFFFF]">{t('home.successfulExchanges')}</div>
             </div>
@@ -302,8 +318,14 @@ export default function Home() {
               <h2 className="text-[12px] font-[700] uppercase tracking-wider text-[#9A9A9A]">
                 {t('home.recentExchanges')}
               </h2>
-              <button onClick={() => navigate('/orders')} className="text-[12px] font-[500] text-[#00CC66]">
-                {t('home.seeAll')}
+              <button 
+                onClick={() => {
+                  WebApp.HapticFeedback.impactOccurred('light');
+                  setIsReviewsOpen(true);
+                }} 
+                className="text-[12px] font-[500] text-[#00CC66]"
+              >
+                Отзывы →
               </button>
             </div>
             <div className="space-y-[12px]">
@@ -604,6 +626,58 @@ export default function Home() {
               })}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Reviews Sheet */}
+      {isReviewsOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-[rgba(0,0,0,0.8)] backdrop-blur-sm sm:items-center sm:px-[16px]">
+          <button
+            type="button"
+            aria-label="Close reviews"
+            onClick={() => setIsReviewsOpen(false)}
+            className="absolute inset-0"
+          />
+          <motion.div 
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="relative w-full max-h-[85vh] sm:max-w-[420px] sm:max-h-[600px] flex flex-col rounded-t-[24px] sm:rounded-[24px] border border-[#222222] bg-[#111111] shadow-2xl"
+          >
+            <div className="flex-shrink-0 flex items-center justify-between px-[20px] py-[16px] border-b border-[#222222]">
+              <h2 className="text-[16px] font-[700] text-[#FFFFFF]">Отзывы клиентов</h2>
+              <button onClick={() => setIsReviewsOpen(false)} className="text-[#808080] hover:text-[#FFFFFF]">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-[20px] space-y-[12px] custom-scrollbar">
+              {MOCK_REVIEWS.map((review) => (
+                <div key={review.id} className="bg-[#1A1A1A] border border-[#222222] rounded-[16px] p-[16px]">
+                  <div className="flex justify-between items-start mb-[8px]">
+                    <div className="flex items-center gap-[8px]">
+                      <div className="w-[32px] h-[32px] rounded-full bg-[#00CC66] text-black flex items-center justify-center font-bold text-[14px]">
+                        {review.name.charAt(0)}
+                      </div>
+                      <div>
+                        <div className="text-[14px] font-[600] text-[#FFFFFF]">{review.name}</div>
+                        <div className="text-[10px] text-[#808080]">{review.date}</div>
+                      </div>
+                    </div>
+                    <div className="flex text-[#00CC66] text-[12px]">
+                      {'★'.repeat(review.rating)}
+                    </div>
+                  </div>
+                  <p className="text-[13px] text-[#D1D1D1] leading-relaxed m-0">
+                    {review.text}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </motion.div>
         </div>
       )}
     </>

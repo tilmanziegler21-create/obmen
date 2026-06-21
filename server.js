@@ -162,6 +162,7 @@ function createDefaultState() {
     orders: [],
     usdtReserve: 2500,
     antiPhishingCode: 'BULL',
+    supportLink: 'cryptobull_manager',
   };
 }
 
@@ -204,6 +205,7 @@ function normalizeState(rawState) {
       : [],
     usdtReserve: Number(raw.usdtReserve) || defaults.usdtReserve,
     antiPhishingCode: ensureString(raw.antiPhishingCode) || defaults.antiPhishingCode,
+    supportLink: ensureString(raw.supportLink) || defaults.supportLink,
   };
 }
 
@@ -266,6 +268,7 @@ function getPublicState(state) {
     orders: state.orders,
     usdtReserve: state.usdtReserve,
     antiPhishingCode: state.antiPhishingCode,
+    supportLink: state.supportLink,
   };
 }
 
@@ -764,6 +767,10 @@ app.patch('/api/admin/settings', (req, res) => {
 
   if (req.body?.antiPhishingCode !== undefined) {
     state.antiPhishingCode = ensureString(req.body.antiPhishingCode) || 'BULL';
+  }
+
+  if (req.body?.supportLink !== undefined) {
+    state.supportLink = ensureString(req.body.supportLink) || 'cryptobull_manager';
   }
 
   writeState(state);

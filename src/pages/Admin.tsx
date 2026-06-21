@@ -24,6 +24,7 @@ export default function Admin() {
     updateUsdtReserve,
     updateRate,
     updateAntiPhishingCode,
+    updateSupportLink,
     updateOrderStatus,
     updateOrderManager,
     addCity,
@@ -44,6 +45,7 @@ export default function Admin() {
   const [editRate, setEditRate] = useState(rates.EUR_USDT.toString());
   const [editUsdtReserve, setEditUsdtReserve] = useState(usdtReserve.toString());
   const [editAntiPhishingCode, setEditAntiPhishingCode] = useState(antiPhishingCode);
+  const [editSupportLink, setEditSupportLink] = useState(useStore.getState().supportLink || 'cryptobull_manager');
   const [editManagers, setEditManagers] = useState<Record<string, string>>(
     orders.reduce((acc, order) => ({ ...acc, [order.id]: order.managerName ?? '' }), {}),
   );
@@ -349,14 +351,14 @@ export default function Admin() {
 
         <div className="bg-bg2 border-[1.5px] border-border2 rounded-r2 p-[20px] space-y-[16px]">
           <div className="flex justify-between items-center mb-[8px]">
-            <h2 className="text-[14px] font-[700] text-text">{t('admin.securityCodeTitle')}</h2>
+            <h2 className="text-[14px] font-[700] text-text">Настройки безопасности и связи</h2>
             <span className="text-[10px] bg-green2 text-green px-[8px] py-[4px] rounded-[6px] uppercase tracking-[0.06em] font-[600]">
               {antiPhishingCode}
             </span>
           </div>
 
           <div className="text-[12px] font-[500] leading-relaxed text-muted">
-            {t('admin.securityCodeHint')}
+            Anti-Phishing код (до 16 символов):
           </div>
 
           <div className="flex flex-col gap-[8px] min-[360px]:flex-row min-[360px]:items-center">
@@ -371,6 +373,27 @@ export default function Admin() {
             <button
               type="button"
               onClick={() => void updateAntiPhishingCode(editAntiPhishingCode)}
+              className="rounded-[10px] border border-border2 bg-bg3 px-[14px] py-[10px] text-[11px] font-[700] uppercase tracking-[0.05em] text-muted transition-colors hover:border-green hover:text-green"
+            >
+              {t('admin.save')}
+            </button>
+          </div>
+
+          <div className="text-[12px] font-[500] leading-relaxed text-muted mt-[16px]">
+            Ссылка на менеджера / поддержку (без @ и https://t.me/):
+          </div>
+
+          <div className="flex flex-col gap-[8px] min-[360px]:flex-row min-[360px]:items-center">
+            <input
+              type="text"
+              value={editSupportLink}
+              onChange={(e) => setEditSupportLink(e.target.value.replace(/^https?:\/\/t\.me\//, '').replace(/^@/, '').trim())}
+              placeholder="cryptobull_manager"
+              className="w-full flex-1 rounded-[10px] border border-border2 bg-bg3 px-[12px] py-[10px] text-[13px] text-text outline-none transition-colors placeholder:text-dim focus:border-green"
+            />
+            <button
+              type="button"
+              onClick={() => void updateSupportLink(editSupportLink)}
               className="rounded-[10px] border border-border2 bg-bg3 px-[14px] py-[10px] text-[11px] font-[700] uppercase tracking-[0.05em] text-muted transition-colors hover:border-green hover:text-green"
             >
               {t('admin.save')}
