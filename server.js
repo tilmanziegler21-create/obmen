@@ -655,8 +655,19 @@ app.get('/api/health', (_req, res) => {
     hasChatId: Boolean(fallbackChatId),
     hasPublicBaseUrl: Boolean(publicBaseUrl),
     orders: state.orders.length,
+    timestamp: Date.now()
   });
 });
+
+// Пингуем сами себя каждые 14 минут, чтобы Render не усыплял Web Service (он засыпает через 15 минут бездействия)
+if (publicBaseUrl) {
+  setInterval(() => {
+    fetch(`${publicBaseUrl}/api/health`)
+      .then(res => res.json())
+      .then(data => console.log(`[KeepAlive] Ping successful:`, data.timestamp))
+      .catch(err => console.error(`[KeepAlive] Ping failed:`, err.message));
+  }, 14 * 60 * 1000);
+}
 
 app.get('/api/bootstrap', (_req, res) => {
   res.json(getPublicState(readState()));
