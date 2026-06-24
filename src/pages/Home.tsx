@@ -347,8 +347,15 @@ export default function Home() {
               <div className="mt-[4px] text-[24px] font-[700] leading-tight text-[#FFFFFF]">
                 1 EUR = <br />{rates.EUR_USDT.toFixed(4)} USDT
               </div>
-              <div className="mt-[8px] text-[11px] font-[400] text-[#808080]">
-                {t('home.rateUpdated', { time: formattedRateUpdatedAt })}
+              
+              <div className="mt-[12px] inline-flex items-center gap-[6px] rounded-[6px] border border-[#00CC66]/30 bg-[#00CC66]/10 px-[6px] py-[4px]">
+                <span className="relative flex h-[6px] w-[6px]">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#00CC66] opacity-75"></span>
+                  <span className="relative inline-flex h-[6px] w-[6px] rounded-full bg-[#00CC66]"></span>
+                </span>
+                <span className="text-[9px] font-[700] uppercase tracking-wider text-[#00CC66]">
+                  Live: автообновление (Binance)
+                </span>
               </div>
             </div>
           </section>
@@ -511,9 +518,14 @@ export default function Home() {
               <div className="pointer-events-none absolute -right-24 -top-24 h-48 w-48 bg-[#00CC66] opacity-[0.03] blur-3xl" />
 
               <div className="relative z-10 mb-[16px] flex items-center justify-between">
-                <span className="text-[12px] font-[600] uppercase tracking-wider text-[#9A9A9A]">{t('home.rateNow')}</span>
                 <div className="flex items-center gap-[6px]">
-                  <div className="h-[6px] w-[6px] rounded-full bg-[#00CC66]" />
+                  <span className="text-[12px] font-[600] uppercase tracking-wider text-[#9A9A9A]">{t('home.rateNow')}</span>
+                  <span className="relative flex h-[6px] w-[6px]">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#00CC66] opacity-75"></span>
+                    <span className="relative inline-flex h-[6px] w-[6px] rounded-full bg-[#00CC66]"></span>
+                  </span>
+                </div>
+                <div className="flex items-center gap-[6px]">
                   <span className="text-[13px] font-[600] text-[#FFFFFF]">
                     1 {getAssetLabel(selectedGiveAsset, language)} = {currentRate.toFixed(4)} {getAssetCurrency(selectedGetAsset)}
                   </span>
