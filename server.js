@@ -681,19 +681,30 @@ async function fetchBinanceRate() {
     const state = readState();
     if (state.rateMode !== 'auto') return;
     
-    const res = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=EURUSDT');
-    const data = await res.json();
-    if (data && data.price) {
-      const binanceRate = parseFloat(data.price);
+    const [resEur, resUah] = await Promise.all([
+      fetch('https://api.binance.com/api/v3/ticker/price?symbol=EURUSDT').catch(() => null),
+      fetch('https://api.binance.com/api/v3/ticker/price?symbol=USDTUAH').catch(() => null)
+    ]);
+    
+    const dataEur = resEur ? await resEur.json().catch(() => null) : null;
+    const dataUah = resUah ? await resUah.json().catch(() => null) : null;
+
+    if (dataEur?.price && dataUah?.price) {
+      const binanceEurUsdt = parseFloat(dataEur.price);
+      const binanceUsdtUah = parseFloat(dataUah.price);
       const spread = state.rateSpread || 0;
-      // На Binance EURUSDT показывает сколько USDT стоит 1 EUR (например, 1.07)
-      // Добавляем маржу (спред). Например, 1.07 + 0.9% = 1.07963
-      const finalRate = binanceRate * (1 + spread / 100);
       
-      state.rates.EUR_USDT = Number(finalRate.toFixed(4));
+      // Наценка (спред) применяется к базовому рыночному курсу
+      const finalEurUsdt = binanceEurUsdt * (1 + spread / 100);
+      const finalUsdtUah = binanceUsdtUah * (1 + spread / 100); // 1 USDT становится дороже в гривнах
+      
+      state.rates.EUR_USDT = Number(finalEurUsdt.toFixed(4));
+      state.rates.UAH_USDT = Number((1 / finalUsdtUah).toFixed(8));
+      state.rates.EUR_UAH = Number((finalEurUsdt * finalUsdtUah).toFixed(2));
+      
       state.rateUpdatedAt = new Date().toISOString();
       writeState(state);
-      console.log(`[Binance] Rate updated: ${binanceRate} + ${spread}% = ${state.rates.EUR_USDT}`);
+      console.log(`[Binance] Rates updated. EUR/USDT: ${state.rates.EUR_USDT}, USDT/UAH: ${finalUsdtUah.toFixed(2)}, EUR/UAH: ${state.rates.EUR_UAH}`);
     }
   } catch (e) {
     console.error('[Binance] Failed to fetch rate:', e.message);
