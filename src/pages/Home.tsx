@@ -186,9 +186,9 @@ export default function Home() {
   const isCityMissing = !currentCity;
   const isCityInactive = currentCity ? !currentCity.isActive : false;
   const isUsdtReserveInsufficient = false; // Reserves limits removed globally
-  const isEurInvalid = selectedGiveAsset === 'EUR_CASH' && (Number(giveAmount) % 10 !== 0 || Number(giveAmount) % 1 !== 0);
+  const isEurInvalid = false; // Removed the % 10 check to allow decimals
   const isReserveBlocked = isCityMissing || isCityInactive;
-  const isValid = Number(giveAmount) > 0 && !isOverLimit && !isReserveBlocked && (!isEurInvalid || Number(giveAmount) === 0);
+  const isValid = Number(giveAmount) > 0 && !isOverLimit && !isReserveBlocked;
   
   const reserveMessage =
     isCityMissing
@@ -558,7 +558,7 @@ export default function Home() {
                     }}
                     placeholder="0"
                     min="0"
-                    step={selectedGiveAsset === 'EUR_CASH' ? '10' : '0.01'}
+                    step="0.01"
                     inputMode="decimal"
                     className="min-w-0 flex-1 bg-transparent text-[24px] font-[700] text-[#FFFFFF] outline-none placeholder:text-[#333333]"
                   />

@@ -88,13 +88,6 @@ export function roundAmountForAsset(asset: ExchangeAsset, amount: number): numbe
     return 0;
   }
 
-  if (asset === 'EUR_CASH') {
-    return Math.floor(amount / 10) * 10;
-  }
-
-  if (asset === 'UAH_CARD') {
-    return Math.floor(amount);
-  }
-
+  // Оставляем 2 знака после запятой для всех валют, чтобы учитывалась любая "мелочь" (центы, копейки)
   return Number(amount.toFixed(2));
 }
