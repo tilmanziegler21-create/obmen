@@ -8,7 +8,7 @@ import { getAllowedTargetAssets, getDefaultTargetAsset, getDirectionFromGiveAsse
 
 type SharedServerState = Pick<
   ExchangeState,
-  'cities' | 'rates' | 'rateUpdatedAt' | 'orders' | 'usdtReserve' | 'antiPhishingCode' | 'supportLink'
+  'cities' | 'rates' | 'rateMode' | 'rateSpread' | 'rateUpdatedAt' | 'orders' | 'usdtReserve' | 'antiPhishingCode' | 'supportLink'
 >;
 
 async function readJsonResponse<T>(response: Response): Promise<T | null> {
@@ -62,6 +62,8 @@ export const useStore = create<ExchangeState>()(
     (set, get) => ({
       cities: INITIAL_CITIES,
       rates: DEFAULT_RATES,
+      rateMode: 'manual',
+      rateSpread: 0.5,
       rateUpdatedAt: new Date().toISOString(),
       orders: [],
       usdtReserve: 2500,
@@ -200,7 +202,7 @@ export const useStore = create<ExchangeState>()(
         }
       },
 
-      updateRate: async (rate) => {
+      updateRateConfig: async (config) => {
         try {
           const response = await fetch('/api/admin/settings', {
             method: 'PATCH',
@@ -208,7 +210,7 @@ export const useStore = create<ExchangeState>()(
               'Content-Type': 'application/json',
               'X-Telegram-Init-Data': WebApp.initData || '',
             },
-            body: JSON.stringify({ rate }),
+            body: JSON.stringify(config),
           });
           const data = await readJsonResponse<{ state: SharedServerState }>(response);
 
@@ -216,7 +218,7 @@ export const useStore = create<ExchangeState>()(
             set({ ...data.state });
           }
         } catch (error) {
-          console.error('Failed to update rate', error);
+          console.error('Failed to update rate config', error);
         }
       },
 
@@ -503,6 +505,8 @@ export const useStore = create<ExchangeState>()(
       partialize: (state) => ({
         cities: state.cities,
         rates: state.rates,
+        rateMode: state.rateMode,
+        rateSpread: state.rateSpread,
         rateUpdatedAt: state.rateUpdatedAt,
         orders: state.orders,
         usdtReserve: state.usdtReserve,
@@ -515,6 +519,8 @@ export const useStore = create<ExchangeState>()(
           cities?: Array<City & { name?: string }>;
           orders?: ExchangeOrder[];
           usdtReserve?: number;
+          rateMode?: 'manual' | 'auto';
+          rateSpread?: number;
           rateUpdatedAt?: string;
           antiPhishingCode?: string;
           supportLink?: string;
@@ -542,6 +548,8 @@ export const useStore = create<ExchangeState>()(
             ...DEFAULT_RATES,
             ...(state.rates ?? {}),
           },
+          rateMode: state.rateMode ?? 'manual',
+          rateSpread: state.rateSpread ?? 0.5,
           rateUpdatedAt: state.rateUpdatedAt ?? new Date().toISOString(),
           antiPhishingCode: state.antiPhishingCode ?? DEFAULT_ANTI_PHISHING_CODE,
           supportLink: state.supportLink ?? 'cryptobull_manager',

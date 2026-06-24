@@ -22,7 +22,7 @@ export default function Admin() {
     profileSettings,
     saveCityConfig,
     updateUsdtReserve,
-    updateRate,
+    updateRateConfig,
     updateAntiPhishingCode,
     updateSupportLink,
     updateOrderStatus,
@@ -42,7 +42,9 @@ export default function Admin() {
   const [editLimits, setEditLimits] = useState<Record<string, string>>(
     cities.reduce((acc, city) => ({ ...acc, [city.id]: city.limitEUR.toString() }), {})
   );
+  const [editRateMode, setEditRateMode] = useState<'manual' | 'auto'>(useStore.getState().rateMode || 'manual');
   const [editRate, setEditRate] = useState(rates.EUR_USDT.toString());
+  const [editRateSpread, setEditRateSpread] = useState(useStore.getState().rateSpread.toString());
   const [editUsdtReserve, setEditUsdtReserve] = useState(usdtReserve.toString());
   const [editAntiPhishingCode, setEditAntiPhishingCode] = useState(antiPhishingCode);
   const [editSupportLink, setEditSupportLink] = useState(useStore.getState().supportLink || 'cryptobull_manager');
@@ -284,28 +286,54 @@ export default function Admin() {
             </span>
           </div>
 
+          <div className="flex bg-bg3 rounded-[10px] p-[4px] mb-[16px] border border-border2">
+            <button
+              onClick={() => setEditRateMode('manual')}
+              className={`flex-1 py-[8px] text-[12px] font-[600] rounded-[8px] transition-all ${editRateMode === 'manual' ? 'bg-[#4F8EF7] text-white shadow-md' : 'text-muted hover:text-text'}`}
+            >
+              Ручной режим
+            </button>
+            <button
+              onClick={() => setEditRateMode('auto')}
+              className={`flex-1 py-[8px] text-[12px] font-[600] rounded-[8px] transition-all ${editRateMode === 'auto' ? 'bg-[#4F8EF7] text-white shadow-md' : 'text-muted hover:text-text'}`}
+            >
+              Авто (Binance)
+            </button>
+          </div>
+
           <div className="space-y-[8px]">
             <div className="text-[11px] font-[600] uppercase tracking-[0.06em] text-muted">
-              {t('admin.rateInputLabel')}
+              {editRateMode === 'auto' ? 'Наценка к курсу Binance (%)' : t('admin.rateInputLabel')}
             </div>
             <div className="flex items-center gap-[8px]">
               <div className="flex-1 relative">
-                <span className="absolute left-[12px] top-1/2 -translate-y-1/2 text-muted font-mono">€</span>
+                <span className="absolute left-[12px] top-1/2 -translate-y-1/2 text-muted font-mono">
+                  {editRateMode === 'auto' ? '%' : '€'}
+                </span>
                 <input
                   type="number"
-                  step="0.0001"
-                  value={editRate}
-                  onChange={(e) => setEditRate(e.target.value)}
+                  step={editRateMode === 'auto' ? "0.1" : "0.0001"}
+                  value={editRateMode === 'auto' ? editRateSpread : editRate}
+                  onChange={(e) => editRateMode === 'auto' ? setEditRateSpread(e.target.value) : setEditRate(e.target.value)}
                   className="w-full bg-bg3 border border-border2 rounded-[8px] py-[10px] pl-[28px] pr-[12px] text-[14px] font-mono text-text outline-none focus:border-[#4F8EF7] transition-colors"
                 />
               </div>
               <button
-                onClick={() => void updateRate(Number(editRate) || rates.EUR_USDT)}
+                onClick={() => void updateRateConfig({ 
+                  rateMode: editRateMode, 
+                  rateSpread: Number(editRateSpread), 
+                  rate: Number(editRate) 
+                })}
                 className="bg-bg3 border border-border2 hover:border-[#4F8EF7] hover:text-[#4F8EF7] text-muted px-[16px] py-[10px] rounded-[8px] text-[12px] font-[600] transition-colors"
               >
                 {t('admin.save')}
               </button>
             </div>
+            {editRateMode === 'auto' && (
+              <div className="text-[11px] text-[#4F8EF7] mt-[4px]">
+                *Курс автоматически парсится с Binance (Spot) каждую минуту с учетом наценки.
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 gap-[10px] md:grid-cols-2">

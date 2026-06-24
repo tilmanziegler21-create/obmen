@@ -158,6 +158,8 @@ function createDefaultState() {
       UAH_USDT: 1 / 44.82,
       EUR_UAH: 52.01,
     },
+    rateMode: 'manual',
+    rateSpread: 0.5,
     rateUpdatedAt: new Date().toISOString(),
     orders: [],
     usdtReserve: 2500,
@@ -184,6 +186,8 @@ function normalizeState(rawState) {
       UAH_USDT: Number(raw.rates?.UAH_USDT) || defaults.rates.UAH_USDT,
       EUR_UAH: Number(raw.rates?.EUR_UAH) || defaults.rates.EUR_UAH,
     },
+    rateMode: ['manual', 'auto'].includes(raw.rateMode) ? raw.rateMode : defaults.rateMode,
+    rateSpread: typeof raw.rateSpread === 'number' && !isNaN(raw.rateSpread) ? Number(raw.rateSpread) : defaults.rateSpread,
     rateUpdatedAt: ensureString(raw.rateUpdatedAt) || defaults.rateUpdatedAt,
     orders: Array.isArray(raw.orders)
       ? raw.orders.map((order) => ({
@@ -264,6 +268,8 @@ function getPublicState(state) {
   return {
     cities: state.cities,
     rates: state.rates,
+    rateMode: state.rateMode,
+    rateSpread: state.rateSpread,
     rateUpdatedAt: state.rateUpdatedAt,
     orders: state.orders,
     usdtReserve: state.usdtReserve,
@@ -669,6 +675,36 @@ if (publicBaseUrl) {
   }, 14 * 60 * 1000);
 }
 
+// Автообновление курса Binance (каждую минуту)
+async function fetchBinanceRate() {
+  try {
+    const state = readState();
+    if (state.rateMode !== 'auto') return;
+    
+    const res = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=EURUSDT');
+    const data = await res.json();
+    if (data && data.price) {
+      const binanceRate = parseFloat(data.price);
+      const spread = state.rateSpread || 0;
+      // На Binance EURUSDT показывает сколько USDT стоит 1 EUR (например, 1.07)
+      // Добавляем маржу (спред). Например, 1.07 + 0.9% = 1.07963
+      const finalRate = binanceRate * (1 + spread / 100);
+      
+      state.rates.EUR_USDT = Number(finalRate.toFixed(4));
+      state.rateUpdatedAt = new Date().toISOString();
+      writeState(state);
+      console.log(`[Binance] Rate updated: ${binanceRate} + ${spread}% = ${state.rates.EUR_USDT}`);
+    }
+  } catch (e) {
+    console.error('[Binance] Failed to fetch rate:', e.message);
+  }
+}
+
+// Запускаем каждую минуту
+setInterval(fetchBinanceRate, 60 * 1000);
+// И один раз при старте
+fetchBinanceRate();
+
 app.get('/api/bootstrap', (_req, res) => {
   res.json(getPublicState(readState()));
 });
@@ -770,6 +806,14 @@ app.patch('/api/admin/settings', (req, res) => {
   if (req.body?.rate !== undefined) {
     state.rates.EUR_USDT = Number(req.body.rate) || state.rates.EUR_USDT;
     state.rateUpdatedAt = new Date().toISOString();
+  }
+
+  if (req.body?.rateMode !== undefined) {
+    state.rateMode = ['manual', 'auto'].includes(req.body.rateMode) ? req.body.rateMode : state.rateMode;
+  }
+
+  if (req.body?.rateSpread !== undefined) {
+    state.rateSpread = Number(req.body.rateSpread) || 0;
   }
 
   if (req.body?.usdtReserve !== undefined) {
