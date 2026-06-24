@@ -98,7 +98,8 @@ export default function Home() {
     setGiveAsset,
     setGetAsset,
     clearCheckoutPrefill,
-    setCommissionPercent
+    setCommissionPercent,
+    fetchInitialData
   } = useStore();
 
   const user = WebApp.initDataUnsafe?.user;
@@ -134,6 +135,14 @@ export default function Home() {
     }, 4000);
     return () => clearInterval(timer);
   }, []);
+
+  // Polling for live rates
+  useEffect(() => {
+    const pollTimer = setInterval(() => {
+      fetchInitialData();
+    }, 15000); // Fetch rates every 15 seconds silently
+    return () => clearInterval(pollTimer);
+  }, [fetchInitialData]);
 
   const metrics = useMemo(
     () => calculateCustomerMetrics(orders, currentUserHandle, currentUserId),
@@ -348,13 +357,13 @@ export default function Home() {
                 1 EUR = <br />{rates.EUR_USDT.toFixed(4)} USDT
               </div>
               
-              <div className="mt-[12px] inline-flex items-center gap-[6px] rounded-[6px] border border-[#00CC66]/30 bg-[#00CC66]/10 px-[6px] py-[4px]">
-                <span className="relative flex h-[6px] w-[6px]">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#00CC66] opacity-75"></span>
-                  <span className="relative inline-flex h-[6px] w-[6px] rounded-full bg-[#00CC66]"></span>
-                </span>
+              <div className="mt-[12px] inline-flex items-center gap-[8px] rounded-full border border-[#00CC66]/30 bg-[#00CC66]/10 px-[10px] py-[6px]">
+                <svg className="w-[12px] h-[12px] text-[#00CC66] animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+                  <path d="M21 3v5h-5" />
+                </svg>
                 <span className="text-[9px] font-[700] uppercase tracking-wider text-[#00CC66]">
-                  Live: автообновление (Binance)
+                  Live: автообновление курса
                 </span>
               </div>
             </div>
@@ -520,10 +529,10 @@ export default function Home() {
               <div className="relative z-10 mb-[16px] flex items-center justify-between">
                 <div className="flex items-center gap-[6px]">
                   <span className="text-[12px] font-[600] uppercase tracking-wider text-[#9A9A9A]">{t('home.rateNow')}</span>
-                  <span className="relative flex h-[6px] w-[6px]">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#00CC66] opacity-75"></span>
-                    <span className="relative inline-flex h-[6px] w-[6px] rounded-full bg-[#00CC66]"></span>
-                  </span>
+                  <svg className="w-[10px] h-[10px] text-[#00CC66] animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+                    <path d="M21 3v5h-5" />
+                  </svg>
                 </div>
                 <div className="flex items-center gap-[6px]">
                   <span className="text-[13px] font-[600] text-[#FFFFFF]">

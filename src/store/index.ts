@@ -478,7 +478,10 @@ export const useStore = create<ExchangeState>()(
       },
       
       fetchInitialData: async () => {
-        set({ isLoading: true });
+        // Only set isLoading to true on the very first load to prevent UI flickering during polling
+        if (!get().rates.EUR_USDT || get().rates.EUR_USDT === DEFAULT_RATES.EUR_USDT) {
+          set({ isLoading: true });
+        }
 
         try {
           const response = await fetch('/api/bootstrap');
@@ -489,6 +492,13 @@ export const useStore = create<ExchangeState>()(
               ...data,
               isLoading: false,
             });
+            // Also recalculate amounts if user is currently typing
+            const { giveAmount, getAmount } = get();
+            if (giveAmount) {
+              get().calculateGetAmount();
+            } else if (getAmount) {
+              get().calculateGiveAmount();
+            }
             return;
           }
         } catch (error) {
