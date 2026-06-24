@@ -811,8 +811,9 @@ app.delete('/api/admin/cities/:id', requireAdmin, (req, res) => {
   }
 });
 
-app.patch('/api/admin/settings', (req, res) => {
+app.patch('/api/admin/settings', requireAdmin, async (req, res) => {
   const state = readState();
+  let shouldFetchBinance = false;
 
   if (req.body?.rate !== undefined) {
     state.rates.EUR_USDT = Number(req.body.rate) || state.rates.EUR_USDT;
@@ -821,10 +822,12 @@ app.patch('/api/admin/settings', (req, res) => {
 
   if (req.body?.rateMode !== undefined) {
     state.rateMode = ['manual', 'auto'].includes(req.body.rateMode) ? req.body.rateMode : state.rateMode;
+    if (state.rateMode === 'auto') shouldFetchBinance = true;
   }
 
   if (req.body?.rateSpread !== undefined) {
     state.rateSpread = Number(req.body.rateSpread) || 0;
+    if (state.rateMode === 'auto') shouldFetchBinance = true;
   }
 
   if (req.body?.usdtReserve !== undefined) {
@@ -840,7 +843,13 @@ app.patch('/api/admin/settings', (req, res) => {
   }
 
   writeState(state);
-  res.json({ ok: true, state: getPublicState(state) });
+
+  if (shouldFetchBinance) {
+    await fetchBinanceRate();
+    res.json({ ok: true, state: getPublicState(readState()) });
+  } else {
+    res.json({ ok: true, state: getPublicState(state) });
+  }
 });
 
 app.patch('/api/admin/orders/:id', requireAdmin, async (req, res) => {

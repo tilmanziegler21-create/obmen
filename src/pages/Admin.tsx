@@ -319,11 +319,15 @@ export default function Admin() {
                 />
               </div>
               <button
-                onClick={() => void updateRateConfig({ 
-                  rateMode: editRateMode, 
-                  rateSpread: Number(editRateSpread), 
-                  rate: Number(editRate) 
-                })}
+                onClick={async () => {
+                  WebApp.HapticFeedback.impactOccurred('medium');
+                  await updateRateConfig({ 
+                    rateMode: editRateMode, 
+                    rateSpread: Number(editRateSpread), 
+                    rate: Number(editRate) 
+                  });
+                  WebApp.HapticFeedback.notificationOccurred('success');
+                }}
                 className="bg-bg3 border border-border2 hover:border-[#4F8EF7] hover:text-[#4F8EF7] text-muted px-[16px] py-[10px] rounded-[8px] text-[12px] font-[600] transition-colors"
               >
                 {t('admin.save')}
