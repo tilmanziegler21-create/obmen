@@ -51,7 +51,7 @@ export default function Checkout() {
     [currentUserId, orders, userHandle],
   );
   const benefits = useMemo(
-    () => getCustomerBenefits(metrics, profileSettings.activatedReferralCode),
+    () => getCustomerBenefits(metrics, profileSettings.activatedReferralCode, useStore.getState().rateSpread),
     [metrics, profileSettings.activatedReferralCode],
   );
 

@@ -692,19 +692,15 @@ async function fetchBinanceRate() {
     if (dataEur?.price && dataUah?.price) {
       const binanceEurUsdt = parseFloat(dataEur.price);
       const binanceUsdtUah = parseFloat(dataUah.price);
-      const spread = state.rateSpread || 0;
-      
-      // Наценка (спред) применяется к базовому рыночному курсу
-      const finalEurUsdt = binanceEurUsdt * (1 + spread / 100);
-      const finalUsdtUah = binanceUsdtUah * (1 + spread / 100); // 1 USDT становится дороже в гривнах
-      
-      state.rates.EUR_USDT = Number(finalEurUsdt.toFixed(4));
-      state.rates.UAH_USDT = Number((1 / finalUsdtUah).toFixed(8));
-      state.rates.EUR_UAH = Number((finalEurUsdt * finalUsdtUah).toFixed(2));
+      // При сохранении чистых курсов Binance, мы больше не применяем наценку здесь!
+      // Наценка применяется динамически на фронтенде в виде commissionPercent (спреда).
+      state.rates.EUR_USDT = Number(binanceEurUsdt.toFixed(4));
+      state.rates.UAH_USDT = Number((1 / binanceUsdtUah).toFixed(8));
+      state.rates.EUR_UAH = Number((binanceEurUsdt * binanceUsdtUah).toFixed(2));
       
       state.rateUpdatedAt = new Date().toISOString();
       writeState(state);
-      console.log(`[Binance] Rates updated. EUR/USDT: ${state.rates.EUR_USDT}, USDT/UAH: ${finalUsdtUah.toFixed(2)}, EUR/UAH: ${state.rates.EUR_UAH}`);
+      console.log(`[Binance] Rates updated. EUR/USDT: ${state.rates.EUR_USDT}, USDT/UAH: ${binanceUsdtUah.toFixed(2)}, EUR/UAH: ${state.rates.EUR_UAH}`);
     }
   } catch (e) {
     console.error('[Binance] Failed to fetch rate:', e.message);

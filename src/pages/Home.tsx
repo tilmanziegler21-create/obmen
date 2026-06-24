@@ -140,7 +140,7 @@ export default function Home() {
     [currentUserHandle, currentUserId, orders],
   );
   const benefits = useMemo(
-    () => getCustomerBenefits(metrics, profileSettings.activatedReferralCode),
+    () => getCustomerBenefits(metrics, profileSettings.activatedReferralCode, useStore.getState().rateSpread),
     [metrics, profileSettings.activatedReferralCode],
   );
 

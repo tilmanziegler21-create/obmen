@@ -303,7 +303,7 @@ export default function Admin() {
 
           <div className="space-y-[8px]">
             <div className="text-[11px] font-[600] uppercase tracking-[0.06em] text-muted">
-              {editRateMode === 'auto' ? 'Наценка к курсу Binance (%)' : t('admin.rateInputLabel')}
+              {editRateMode === 'auto' ? 'Комиссия обменника (Спред, %)' : t('admin.rateInputLabel')}
             </div>
             <div className="flex items-center gap-[8px]">
               <div className="flex-1 relative">
@@ -335,7 +335,7 @@ export default function Admin() {
             </div>
             {editRateMode === 'auto' && (
               <div className="text-[11px] text-[#4F8EF7] mt-[4px]">
-                *Курс автоматически парсится с Binance (Spot) каждую минуту с учетом наценки.
+                *Курс парсится с Binance. Ваша комиссия будет автоматически вычитаться в пользу обменника при любом направлении.
               </div>
             )}
           </div>

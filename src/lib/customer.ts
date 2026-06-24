@@ -112,14 +112,15 @@ export function getTierDiscountPercent(tier: LoyaltyTier): number {
 export function getCustomerBenefits(
   metrics: CustomerMetrics,
   activatedReferralCode: string,
+  baseCommissionPercent: number = 4
 ): CustomerBenefits {
   const tier = getLoyaltyTier(metrics);
   const loyaltyDiscountPercent = getTierDiscountPercent(tier);
   const hasReferralActivated = activatedReferralCode.trim().length > 0;
   const isReferralFirstDeal = hasReferralActivated && metrics.deals === 0;
-  const referralDiscountPercent = isReferralFirstDeal ? BASE_COMMISSION_PERCENT : 0;
-  const totalDiscountPercent = Math.min(BASE_COMMISSION_PERCENT, loyaltyDiscountPercent + referralDiscountPercent);
-  const effectiveCommissionPercent = Math.max(0, BASE_COMMISSION_PERCENT - totalDiscountPercent);
+  const referralDiscountPercent = isReferralFirstDeal ? baseCommissionPercent : 0;
+  const totalDiscountPercent = Math.min(baseCommissionPercent, loyaltyDiscountPercent + referralDiscountPercent);
+  const effectiveCommissionPercent = Math.max(0, baseCommissionPercent - totalDiscountPercent);
 
   return {
     tier,
