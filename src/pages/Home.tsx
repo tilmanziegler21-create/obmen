@@ -17,6 +17,39 @@ const MOCK_REVIEWS = [
   { id: 5, name: 'Maxim K.', text: 'Круто, что можно зафиксировать курс. Менял крупную сумму, все прошло гладко.', rating: 5, date: '10.06.2026' },
 ];
 
+const BANNERS = [
+  {
+    id: 1,
+    title: 'Молниеносный обмен',
+    desc: 'EUR ↔ USDT за 15 минут. Безопасно и полностью анонимно.',
+    icon: '⚡',
+    gradient: 'from-[#00CC66]/20 to-[#000000]',
+    borderColor: 'border-[#00CC66]/30',
+    iconBg: 'bg-[#00CC66]/10',
+    iconColor: 'text-[#00CC66]'
+  },
+  {
+    id: 2,
+    title: 'Партнерская сеть',
+    desc: 'Приглашай друзей и получай % с каждой их сделки пожизненно.',
+    icon: '🤝',
+    gradient: 'from-[#4F8EF7]/20 to-[#000000]',
+    borderColor: 'border-[#4F8EF7]/30',
+    iconBg: 'bg-[#4F8EF7]/10',
+    iconColor: 'text-[#4F8EF7]'
+  },
+  {
+    id: 3,
+    title: 'VIP Обслуживание',
+    desc: 'Особые условия и выезд инкассатора для сумм от 10 000€.',
+    icon: '💎',
+    gradient: 'from-[#F5A623]/20 to-[#000000]',
+    borderColor: 'border-[#F5A623]/30',
+    iconBg: 'bg-[#F5A623]/10',
+    iconColor: 'text-[#F5A623]'
+  }
+];
+
 function AssetIcon({ asset }: { asset: 'EUR_CASH' | 'UAH_CARD' | 'USDT' }) {
   if (asset === 'EUR_CASH') {
     return (
@@ -78,9 +111,29 @@ export default function Home() {
   const [isReviewsOpen, setIsReviewsOpen] = useState(false);
   const [isAmountConfirmed, setIsAmountConfirmed] = useState(false);
   const [isCityPickerOpen, setIsCityPickerOpen] = useState(!selectedCityId);
+  const [activeBanner, setActiveBanner] = useState(0);
 
   const amountInputRef = useRef<HTMLInputElement>(null);
   const calculatorRef = useRef<HTMLDivElement>(null);
+  const bannerScrollRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll for banners
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setActiveBanner((prev) => {
+        const next = (prev + 1) % BANNERS.length;
+        if (bannerScrollRef.current) {
+          const scrollWidth = bannerScrollRef.current.clientWidth;
+          bannerScrollRef.current.scrollTo({
+            left: next * scrollWidth,
+            behavior: 'smooth'
+          });
+        }
+        return next;
+      });
+    }, 4000);
+    return () => clearInterval(timer);
+  }, []);
 
   const metrics = useMemo(
     () => calculateCustomerMetrics(orders, currentUserHandle, currentUserId),
@@ -235,6 +288,47 @@ export default function Home() {
             </button>
           </div>
         </header>
+
+        {/* Слайдер с баннерами */}
+        <div className="relative mb-[24px] -mx-[16px] px-[16px]">
+          <div 
+            ref={bannerScrollRef}
+            className="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar gap-[12px] pb-[8px]"
+            onScroll={(e) => {
+              const target = e.target as HTMLDivElement;
+              const index = Math.round(target.scrollLeft / target.clientWidth);
+              setActiveBanner(index);
+            }}
+          >
+            {BANNERS.map((banner) => (
+              <div 
+                key={banner.id} 
+                className={`min-w-full snap-center rounded-[20px] bg-gradient-to-br ${banner.gradient} p-[20px] border ${banner.borderColor} flex items-center gap-[16px]`}
+              >
+                <div className={`shrink-0 w-[48px] h-[48px] rounded-full ${banner.iconBg} ${banner.iconColor} flex items-center justify-center text-[24px] shadow-lg`}>
+                  {banner.icon}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className={`text-[15px] font-[800] mb-[4px] ${banner.iconColor}`}>
+                    {banner.title}
+                  </h3>
+                  <p className="text-[12px] font-[500] text-[#D1D1D1] leading-snug m-0">
+                    {banner.desc}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+          {/* Пагинация (точки) */}
+          <div className="flex justify-center gap-[6px] mt-[8px]">
+            {BANNERS.map((_, idx) => (
+              <div 
+                key={idx} 
+                className={`h-[4px] rounded-full transition-all duration-300 ${idx === activeBanner ? 'w-[16px] bg-[#00CC66]' : 'w-[4px] bg-[#333333]'}`}
+              />
+            ))}
+          </div>
+        </div>
 
         <div className="flex-1 flex flex-col space-y-[12px]">
           {/* Главный блок коммерческих показателей */}
