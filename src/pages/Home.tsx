@@ -6,7 +6,7 @@ import { useStore } from '../store';
 import { useI18n } from '../i18n';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { calculateCustomerMetrics, getCustomerBenefits, isOrderOwnedByUser } from '../lib/customer';
-import { getAllowedTargetAssets, getAssetCurrency, getAssetLabel, getRouteLabel } from '../lib/exchangeAssets';
+import { getAllowedTargetAssets, getAssetCurrency, getAssetLabel } from '../lib/exchangeAssets';
 import { getAssetConversionRate } from '../lib/rates';
 
 const MOCK_REVIEWS = [
@@ -82,9 +82,7 @@ export default function Home() {
   const { t, language } = useI18n();
   const { 
     rates, 
-    rateUpdatedAt,
     orders, 
-    usdtReserve,
     cities,
     selectedCityId,
     profileSettings,
@@ -106,11 +104,9 @@ export default function Home() {
   const currentUserId = user?.id ? String(user.id) : null;
   const currentUserHandle = user?.username ? `@${user.username}` : (user?.first_name || t('checkout.unknownUser'));
   
-  const [isReferralCopied, setIsReferralCopied] = useState(false);
   const [citySearch, setCitySearch] = useState('');
   const [activeAssetSheet, setActiveAssetSheet] = useState<'give' | 'get' | null>(null);
   const [isReviewsOpen, setIsReviewsOpen] = useState(false);
-  const [isAmountConfirmed, setIsAmountConfirmed] = useState(false);
   const [isCityPickerOpen, setIsCityPickerOpen] = useState(!selectedCityId);
   const [activeBanner, setActiveBanner] = useState(0);
 
@@ -180,24 +176,17 @@ export default function Home() {
   }, [cities, citySearch, t]);
 
   const currentCity = cities.find((city) => city.id === selectedCityId) ?? null;
-  const eurCashAmount = selectedGiveAsset === 'EUR_CASH' ? Number(giveAmount) : selectedGetAsset === 'EUR_CASH' ? Number(getAmount) : 0;
-  const usdtAmount = selectedGetAsset === 'USDT' ? Number(getAmount) : selectedGiveAsset === 'USDT' ? Number(giveAmount) : 0;
-  const isOverLimit = false; // Limits removed per user request
   const isCityMissing = !currentCity;
   const isCityInactive = currentCity ? !currentCity.isActive : false;
-  const isUsdtReserveInsufficient = false; // Reserves limits removed globally
-  const isEurInvalid = false; // Removed the % 10 check to allow decimals
   const isReserveBlocked = isCityMissing || isCityInactive;
-  const isValid = Number(giveAmount) > 0 && !isOverLimit && !isReserveBlocked;
+  const isValid = Number(giveAmount) > 0 && !isReserveBlocked;
   
   const reserveMessage =
     isCityMissing
       ? t('home.cityRequired')
       : isCityInactive
         ? t('home.cityInactive')
-        : isUsdtReserveInsufficient
-          ? t('home.usdtReserveError')
-          : null;
+        : null;
 
   const handleOpenProfile = () => {
     WebApp.HapticFeedback.impactOccurred('light');
@@ -207,21 +196,6 @@ export default function Home() {
   const handleOpenSupport = () => {
     WebApp.HapticFeedback.impactOccurred('light');
     WebApp.openTelegramLink(`https://t.me/${supportLink}`);
-  };
-
-  const handleCopyReferralCode = async () => {
-    const referralCode = profileSettings.referralCode.trim();
-    if (!referralCode) return;
-
-    try {
-      await navigator.clipboard.writeText(referralCode);
-      WebApp.HapticFeedback.notificationOccurred('success');
-      setIsReferralCopied(true);
-      window.setTimeout(() => setIsReferralCopied(false), 1500);
-    } catch (error) {
-      console.error('Failed to copy referral code', error);
-      WebApp.HapticFeedback.notificationOccurred('error');
-    }
   };
 
   const scrollToCalculator = () => {
@@ -260,16 +234,11 @@ export default function Home() {
   const handleConfirmAmount = () => {
     amountInputRef.current?.blur();
     if (giveAmount) {
-      setIsAmountConfirmed(true);
       WebApp.HapticFeedback.selectionChanged();
     }
   };
 
   const currentRate = getAssetConversionRate(selectedGiveAsset, selectedGetAsset, rates);
-  const formattedRateUpdatedAt = new Date(rateUpdatedAt).toLocaleTimeString(language, {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
   const giveAssetOptions = ['EUR_CASH', 'UAH_CARD', 'USDT'] as const;
   const getAssetOptions = getAllowedTargetAssets(selectedGiveAsset);
 
@@ -346,25 +315,20 @@ export default function Home() {
               <div className="absolute inset-0 bg-[url('https://coreva-normal.trae.ai/api/ide/v1/text_to_image?prompt=3d%20golden%20bull%20head%20statue%20dark%20background&image_size=square')] bg-cover bg-center bg-no-repeat mix-blend-screen" />
             </div>
             <div className="relative z-10 w-[65%]">
-              <div className="inline-flex items-center gap-[6px] rounded-full bg-[#111111]/80 px-[8px] py-[4px] backdrop-blur-sm">
-                <div className="h-[6px] w-[6px] rounded-full bg-[#00CC66]" />
-                <span className="text-[10px] font-[500] text-[#FFFFFF]">{t('home.onlineAverageTime')}</span>
-              </div>
-              <div className="mt-[16px] text-[12px] font-[500] uppercase tracking-wider text-[#9A9A9A]">
-                {t('home.bestRateToday')}
-              </div>
-              <div className="mt-[4px] text-[24px] font-[700] leading-tight text-[#FFFFFF]">
-                1 EUR = <br />{rates.EUR_USDT.toFixed(4)} USDT
-              </div>
-              
-              <div className="mt-[12px] inline-flex items-center gap-[8px] rounded-full border border-[#00CC66]/30 bg-[#00CC66]/10 px-[10px] py-[6px]">
-                <svg className="w-[12px] h-[12px] text-[#00CC66] animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <div className="inline-flex items-center gap-[6px] rounded-full border border-[#00CC66]/30 bg-[#00CC66]/10 px-[8px] py-[4px] backdrop-blur-sm">
+                <svg className="w-[10px] h-[10px] text-[#00CC66] animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
                   <path d="M21 3v5h-5" />
                 </svg>
                 <span className="text-[9px] font-[700] uppercase tracking-wider text-[#00CC66]">
-                  Live: автообновление курса
+                  Live: автообновление
                 </span>
+              </div>
+              <div className="mt-[12px] text-[12px] font-[500] uppercase tracking-wider text-[#9A9A9A]">
+                {t('home.bestRateToday')}
+              </div>
+              <div className="mt-[4px] text-[24px] font-[700] leading-tight text-[#FFFFFF]">
+                1 EUR = <br />{rates.EUR_USDT.toFixed(4)} USDT
               </div>
             </div>
           </section>
@@ -550,7 +514,6 @@ export default function Home() {
                     type="number"
                     value={giveAmount}
                     onChange={(e) => {
-                      setIsAmountConfirmed(false);
                       setGiveAmount(e.target.value);
                     }}
                     onKeyDown={(e) => {
@@ -692,9 +655,9 @@ export default function Home() {
               )}
             </section>
 
-            {Number(giveAmount) > 0 && (isOverLimit || isEurInvalid || !!reserveMessage) && (
+            {Number(giveAmount) > 0 && !!reserveMessage && (
               <div className="mt-[12px] rounded-[16px] border border-[#3A2323] bg-[#1A1010] px-[16px] py-[14px] text-[13px] font-[400] text-[#F1C6C6]">
-                {isOverLimit ? t('home.limitError') : reserveMessage ?? t('home.amountError')}
+                {reserveMessage ?? t('home.amountError')}
               </div>
             )}
 

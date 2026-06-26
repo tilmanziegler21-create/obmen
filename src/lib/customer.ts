@@ -19,8 +19,6 @@ export interface CustomerBenefits {
   isReferralFirstDeal: boolean;
 }
 
-const BASE_COMMISSION_PERCENT = 4;
-
 export function isOrderOwnedByUser(order: ExchangeOrder, userHandle: string, userId?: string | number | null): boolean {
   if (userId && order.userId) {
     return String(order.userId) === String(userId);

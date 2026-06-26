@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import WebApp from '@twa-dev/sdk';
 import { useNavigate } from 'react-router-dom';
@@ -14,8 +14,6 @@ export default function Exchange() {
   const { 
     rates, 
     orders, 
-    usdtReserve,
-    cities,
     profileSettings,
     selectedGiveAsset,
     selectedGetAsset,
@@ -24,7 +22,7 @@ export default function Exchange() {
     setGiveAmount,
     setGiveAsset,
     setGetAsset,
-    clearCheckoutPrefill
+    clearCheckoutPrefill,
   } = useStore();
 
   const user = WebApp.initDataUnsafe?.user;
@@ -79,8 +77,6 @@ export default function Exchange() {
   };
 
   const currentRate = getAssetConversionRate(selectedGiveAsset, selectedGetAsset, rates);
-  const totalEurReserve = useMemo(() => cities.reduce((sum, city) => sum + city.limitEUR, 0), [cities]);
-  const formattedEurReserve = totalEurReserve >= 3000 ? '3000' : totalEurReserve.toString();
 
   return (
     <motion.div

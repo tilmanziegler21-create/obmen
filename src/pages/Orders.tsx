@@ -15,8 +15,8 @@ interface OrdersLocationState {
 export default function Orders() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { t, language } = useI18n();
-  const { orders, profileSettings, supportLink, applyOrderTemplate } = useStore();
+  const { t } = useI18n();
+  const { orders, supportLink, applyOrderTemplate } = useStore();
   const user = WebApp.initDataUnsafe?.user;
   const currentUserId = user?.id ? String(user.id) : null;
   const currentUserHandle = user?.username ? `@${user.username}` : (user?.first_name || t('checkout.unknownUser'));

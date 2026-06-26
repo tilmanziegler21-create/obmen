@@ -16,8 +16,8 @@ export default function Checkout() {
   const telegramInitData = WebApp.initData || '';
   const telegramUserId = WebApp.initDataUnsafe?.user?.id ?? null;
   const { 
-    cities, selectedCityId, selectedGiveAsset, selectedGetAsset, rates, usdtReserve, antiPhishingCode, checkoutPrefill, orders, profileSettings,
-    giveAmount, getAmount, clearCheckoutPrefill, setCommissionPercent, fetchInitialData, createOrder
+    cities, selectedCityId, selectedGiveAsset, selectedGetAsset, rates, antiPhishingCode, checkoutPrefill, orders, profileSettings,
+    giveAmount, getAmount, clearCheckoutPrefill, setCommissionPercent, createOrder
   } = useStore();
   const NETWORKS = [
     { id: 'TRC-20', label: 'TRC-20', time: t('checkout.networkTimes.trc20') },
@@ -82,8 +82,6 @@ export default function Checkout() {
     WebApp.HapticFeedback.impactOccurred('heavy');
     setIsSubmitting(true);
     setSubmitError(null);
-    
-    let isSentSuccessfully = false;
 
     try {
       const orderPayload = {
@@ -156,11 +154,6 @@ export default function Checkout() {
           message: e instanceof Error ? e.message : t('checkout.unknownUser'),
         }),
       );
-      setIsSubmitting(false);
-      return;
-    }
-
-    if (!isSentSuccessfully) {
       setIsSubmitting(false);
     }
   };

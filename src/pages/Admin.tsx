@@ -39,9 +39,6 @@ export default function Admin() {
   const adminIds = (import.meta.env.VITE_ADMIN_IDS || '').split(',').map((id: string) => id.trim());
   const isAdmin = user?.id ? adminIds.includes(user.id.toString()) : false;
 
-  const [editLimits, setEditLimits] = useState<Record<string, string>>(
-    cities.reduce((acc, city) => ({ ...acc, [city.id]: city.limitEUR.toString() }), {})
-  );
   const [editRateMode, setEditRateMode] = useState<'manual' | 'auto'>(useStore.getState().rateMode || 'manual');
   const [editRate, setEditRate] = useState(rates.EUR_USDT.toString());
   const [editRateSpread, setEditRateSpread] = useState(useStore.getState().rateSpread.toString());
@@ -56,14 +53,8 @@ export default function Admin() {
   const [cityFilter, setCityFilter] = useState<'all' | string>('all');
   const [directionFilter, setDirectionFilter] = useState<'all' | ExchangeDirection>('all');
   const [onlyMyOrders, setOnlyMyOrders] = useState(false);
-  const [citySaveState, setCitySaveState] = useState<Record<string, 'idle' | 'saving' | 'saved' | 'error'>>({});
-  const [citySaveErrorMessage, setCitySaveErrorMessage] = useState<Record<string, string>>({});
   const [newCityName, setNewCityName] = useState('');
   const [isAddingCity, setIsAddingCity] = useState(false);
-
-  useEffect(() => {
-    setEditLimits(cities.reduce((acc, city) => ({ ...acc, [city.id]: city.limitEUR.toString() }), {}));
-  }, [cities]);
 
   useEffect(() => {
     setEditManagers(orders.reduce((acc, order) => ({ ...acc, [order.id]: order.managerName ?? '' }), {}));
@@ -151,35 +142,15 @@ export default function Admin() {
     navigate('/');
   };
 
-  const handleSave = async (id: string) => {
-    WebApp.HapticFeedback.impactOccurred('medium');
-    const newLimit = Number(editLimits[id]) || 0;
-    setCitySaveState((prev) => ({ ...prev, [id]: 'saving' }));
-    setCitySaveErrorMessage((prev) => ({ ...prev, [id]: '' }));
-    const result = await saveCityConfig(id, {
-      limitEUR: newLimit,
-    });
-    setCitySaveState((prev) => ({ ...prev, [id]: result.ok ? 'saved' : 'error' }));
-    if (!result.ok) {
-      setCitySaveErrorMessage((prev) => ({ ...prev, [id]: result.error ?? '' }));
-    }
-  };
-
   const handleToggle = async (id: string) => {
     WebApp.HapticFeedback.selectionChanged();
     const city = cities.find((item) => item.id === id);
     if (!city) {
       return;
     }
-    setCitySaveState((prev) => ({ ...prev, [id]: 'saving' }));
-    setCitySaveErrorMessage((prev) => ({ ...prev, [id]: '' }));
-    const result = await saveCityConfig(id, {
+    await saveCityConfig(id, {
       isActive: !city.isActive,
     });
-    setCitySaveState((prev) => ({ ...prev, [id]: result.ok ? 'saved' : 'error' }));
-    if (!result.ok) {
-      setCitySaveErrorMessage((prev) => ({ ...prev, [id]: result.error ?? '' }));
-    }
   };
 
   const handleAddCity = async () => {
