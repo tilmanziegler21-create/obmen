@@ -311,8 +311,13 @@ export default function Home() {
         <div className="flex-1 flex flex-col space-y-[12px]">
           {/* Главный блок коммерческих показателей */}
           <section className="relative overflow-hidden rounded-[20px] bg-gradient-to-br from-[#1A1A1A] to-[#0D0D0D] p-[20px]">
-            <div className="absolute right-0 top-0 h-full w-[45%] opacity-80">
-              <div className="absolute inset-0 bg-[url('https://coreva-normal.trae.ai/api/ide/v1/text_to_image?prompt=3d%20golden%20bull%20head%20statue%20dark%20background&image_size=square')] bg-cover bg-center bg-no-repeat mix-blend-screen" />
+            <div className="absolute right-0 top-0 h-full w-[60%] pointer-events-none">
+              {/* Увеличенный фон, чтобы обрезать водяной знак */}
+              <div className="absolute inset-0 bg-[url('https://coreva-normal.trae.ai/api/ide/v1/text_to_image?prompt=3d%20golden%20bull%20head%20statue%20dark%20background&image_size=square')] bg-[length:150%_150%] bg-[position:center_15%] bg-no-repeat mix-blend-screen opacity-70" />
+              {/* Плавный градиент слева направо (переход в текст) */}
+              <div className="absolute inset-0 bg-gradient-to-r from-[#1A1A1A] via-[#1A1A1A]/80 to-transparent" />
+              {/* Плавный градиент снизу вверх (переход в фон) */}
+              <div className="absolute inset-0 bg-gradient-to-t from-[#0D0D0D] via-[#0D0D0D]/50 to-transparent" />
             </div>
             <div className="relative z-10 w-[65%]">
               <div className="inline-flex items-center gap-[6px] rounded-full border border-[#00CC66]/30 bg-[#00CC66]/10 px-[8px] py-[4px] backdrop-blur-sm">
