@@ -939,12 +939,7 @@ async function fetchEurUsdtRate() {
 }
 
 async function fetchUsdtUahRate() {
-  const binance = await fetchJsonSafe('https://api.binance.com/api/v3/ticker/price?symbol=USDTUAH');
-  const binancePrice = Number(binance?.price);
-  if (Number.isFinite(binancePrice) && binancePrice > 0) {
-    return { source: 'binance', usdtUah: binancePrice };
-  }
-
+  // Сначала FX-источники: Binance USDTUAH часто даёт «кривой» курс (премия к рынку)
   const coinbase = await fetchJsonSafe('https://api.coinbase.com/v2/exchange-rates?currency=USDT');
   const uahPerUsdt = Number(coinbase?.data?.rates?.UAH);
   if (Number.isFinite(uahPerUsdt) && uahPerUsdt > 0) {
@@ -955,6 +950,12 @@ async function fetchUsdtUahRate() {
   const uahPerUsd = Number(openEr?.rates?.UAH);
   if (Number.isFinite(uahPerUsd) && uahPerUsd > 0) {
     return { source: 'open.er-api', usdtUah: uahPerUsd };
+  }
+
+  const binance = await fetchJsonSafe('https://api.binance.com/api/v3/ticker/price?symbol=USDTUAH');
+  const binancePrice = Number(binance?.price);
+  if (Number.isFinite(binancePrice) && binancePrice > 0) {
+    return { source: 'binance', usdtUah: binancePrice };
   }
 
   return null;
