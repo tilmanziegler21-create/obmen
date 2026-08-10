@@ -675,35 +675,103 @@ if (publicBaseUrl) {
   }, 14 * 60 * 1000);
 }
 
-// Автообновление курса Binance (каждую минуту)
+// Автообновление курсов (каждую минуту). Binance + fallback на Coinbase / open.er-api
+async function fetchJsonSafe(url) {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    return await response.json().catch(() => null);
+  } catch {
+    return null;
+  }
+}
+
+async function fetchEurUsdtRate() {
+  const binance = await fetchJsonSafe('https://api.binance.com/api/v3/ticker/price?symbol=EURUSDT');
+  const binancePrice = Number(binance?.price);
+  if (Number.isFinite(binancePrice) && binancePrice > 0) {
+    return { source: 'binance', eurUsdt: binancePrice };
+  }
+
+  const coinbase = await fetchJsonSafe('https://api.coinbase.com/v2/exchange-rates?currency=USDT');
+  const eurPerUsdt = Number(coinbase?.data?.rates?.EUR);
+  if (Number.isFinite(eurPerUsdt) && eurPerUsdt > 0) {
+    return { source: 'coinbase', eurUsdt: 1 / eurPerUsdt };
+  }
+
+  const openEr = await fetchJsonSafe('https://open.er-api.com/v6/latest/USD');
+  const eurPerUsd = Number(openEr?.rates?.EUR);
+  if (Number.isFinite(eurPerUsd) && eurPerUsd > 0) {
+    return { source: 'open.er-api', eurUsdt: 1 / eurPerUsd };
+  }
+
+  return null;
+}
+
+async function fetchUsdtUahRate() {
+  const binance = await fetchJsonSafe('https://api.binance.com/api/v3/ticker/price?symbol=USDTUAH');
+  const binancePrice = Number(binance?.price);
+  if (Number.isFinite(binancePrice) && binancePrice > 0) {
+    return { source: 'binance', usdtUah: binancePrice };
+  }
+
+  const coinbase = await fetchJsonSafe('https://api.coinbase.com/v2/exchange-rates?currency=USDT');
+  const uahPerUsdt = Number(coinbase?.data?.rates?.UAH);
+  if (Number.isFinite(uahPerUsdt) && uahPerUsdt > 0) {
+    return { source: 'coinbase', usdtUah: uahPerUsdt };
+  }
+
+  const openEr = await fetchJsonSafe('https://open.er-api.com/v6/latest/USD');
+  const uahPerUsd = Number(openEr?.rates?.UAH);
+  if (Number.isFinite(uahPerUsd) && uahPerUsd > 0) {
+    return { source: 'open.er-api', usdtUah: uahPerUsd };
+  }
+
+  return null;
+}
+
 async function fetchBinanceRate() {
   try {
     const state = readState();
     if (state.rateMode !== 'auto') return;
-    
-    const [resEur, resUah] = await Promise.all([
-      fetch('https://api.binance.com/api/v3/ticker/price?symbol=EURUSDT').catch(() => null),
-      fetch('https://api.binance.com/api/v3/ticker/price?symbol=USDTUAH').catch(() => null)
-    ]);
-    
-    const dataEur = resEur ? await resEur.json().catch(() => null) : null;
-    const dataUah = resUah ? await resUah.json().catch(() => null) : null;
 
-    if (dataEur?.price && dataUah?.price) {
-      const binanceEurUsdt = parseFloat(dataEur.price);
-      const binanceUsdtUah = parseFloat(dataUah.price);
-      // При сохранении чистых курсов Binance, мы больше не применяем наценку здесь!
-      // Наценка применяется динамически на фронтенде в виде commissionPercent (спреда).
-      state.rates.EUR_USDT = Number(binanceEurUsdt.toFixed(4));
-      state.rates.UAH_USDT = Number((1 / binanceUsdtUah).toFixed(8));
-      state.rates.EUR_UAH = Number((binanceEurUsdt * binanceUsdtUah).toFixed(2));
-      
-      state.rateUpdatedAt = new Date().toISOString();
-      writeState(state);
-      console.log(`[Binance] Rates updated. EUR/USDT: ${state.rates.EUR_USDT}, USDT/UAH: ${binanceUsdtUah.toFixed(2)}, EUR/UAH: ${state.rates.EUR_UAH}`);
+    const [eurResult, uahResult] = await Promise.all([
+      fetchEurUsdtRate(),
+      fetchUsdtUahRate(),
+    ]);
+
+    let changed = false;
+
+    if (eurResult) {
+      state.rates.EUR_USDT = Number(eurResult.eurUsdt.toFixed(4));
+      changed = true;
     }
+
+    if (uahResult) {
+      state.rates.UAH_USDT = Number((1 / uahResult.usdtUah).toFixed(8));
+      changed = true;
+    }
+
+    // EUR_UAH = UAH за 1 EUR = (USDT за 1 EUR) / (USDT за 1 UAH) = EUR_USDT / UAH_USDT
+    // либо через usdtUah: EUR_USDT * usdtUah
+    if (state.rates.EUR_USDT > 0 && state.rates.UAH_USDT > 0) {
+      state.rates.EUR_UAH = Number((state.rates.EUR_USDT / state.rates.UAH_USDT).toFixed(2));
+      changed = true;
+    }
+
+    if (!changed) {
+      console.warn('[Rates] No EUR/UAH quotes available from Binance or fallbacks');
+      return;
+    }
+
+    state.rateUpdatedAt = new Date().toISOString();
+    writeState(state);
+    console.log(
+      `[Rates] Updated via EUR=${eurResult?.source || 'keep'}, UAH=${uahResult?.source || 'keep'}. ` +
+      `EUR/USDT: ${state.rates.EUR_USDT}, UAH/USDT: ${(1 / state.rates.UAH_USDT).toFixed(2)}, EUR/UAH: ${state.rates.EUR_UAH}`,
+    );
   } catch (e) {
-    console.error('[Binance] Failed to fetch rate:', e.message);
+    console.error('[Rates] Failed to fetch rate:', e.message);
   }
 }
 
@@ -919,6 +987,24 @@ app.post('/api/orders', async (req, res) => {
     }
 
     const state = readState();
+
+    const MIN_EXCHANGE_EUR = 100;
+    const giveAmountNumber = Number(orderDraft.giveAmount);
+    const giveCurrency = orderDraft.giveCurrency || 'EUR';
+    let giveAmountInEur = giveAmountNumber;
+    if (giveCurrency === 'UAH') {
+      giveAmountInEur = state.rates.EUR_UAH > 0 ? giveAmountNumber / state.rates.EUR_UAH : 0;
+    } else if (giveCurrency === 'USDT') {
+      giveAmountInEur = state.rates.EUR_USDT > 0 ? giveAmountNumber / state.rates.EUR_USDT : 0;
+    }
+
+    if (!Number.isFinite(giveAmountInEur) || giveAmountInEur + 1e-9 < MIN_EXCHANGE_EUR) {
+      res.status(400).json({
+        error: `Minimum exchange amount is ${MIN_EXCHANGE_EUR} EUR (or equivalent)`,
+        minExchangeEUR: MIN_EXCHANGE_EUR,
+      });
+      return;
+    }
     
     // Добавляем фоллбек для города: если не нашли, берем первый попавшийся активный
     let city = state.cities.find((item) => item.id === orderDraft.cityId || item.cityKey === orderDraft.cityKey);

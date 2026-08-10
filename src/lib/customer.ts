@@ -136,7 +136,7 @@ export function getCommissionMultiplier(commissionPercent: number): number {
 }
 
 export function getClientRate(
-  direction: ExchangeDirection,
+  _direction: ExchangeDirection,
   baseRate: number,
   commissionPercent: number,
 ): number {
@@ -146,5 +146,6 @@ export function getClientRate(
     return 0;
   }
 
-  return direction === 'GIVE_CASH' ? baseRate * multiplier : baseRate / multiplier;
+  // Комиссия всегда уменьшает курс для клиента — как в calculateGetAmount (* multiplier)
+  return baseRate * multiplier;
 }

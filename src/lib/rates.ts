@@ -3,6 +3,7 @@ import { getAssetCurrency } from './exchangeAssets';
 
 export const DEFAULT_UAH_PER_USDT = 44.82;
 export const DEFAULT_EUR_UAH = 52.01;
+export const MIN_EXCHANGE_EUR = 100;
 
 export const DEFAULT_RATES: Rates = {
   EUR_USDT: DEFAULT_EUR_UAH / DEFAULT_UAH_PER_USDT,
@@ -41,6 +42,18 @@ export function convertCurrencyToEur(amount: number, currency: Currency, rates: 
   }
 
   return rates.EUR_USDT === 0 ? 0 : amount / rates.EUR_USDT;
+}
+
+export function getGiveAmountInEur(amount: number, giveAsset: ExchangeAsset, rates: Rates): number {
+  return convertCurrencyToEur(amount, getAssetCurrency(giveAsset), rates);
+}
+
+export function isBelowMinExchange(amount: number, giveAsset: ExchangeAsset, rates: Rates): boolean {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return true;
+  }
+
+  return getGiveAmountInEur(amount, giveAsset, rates) + 1e-9 < MIN_EXCHANGE_EUR;
 }
 
 export function getConversionRate(fromCurrency: Currency, toCurrency: Currency, rates: Rates): number {

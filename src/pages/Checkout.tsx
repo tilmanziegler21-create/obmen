@@ -6,7 +6,7 @@ import WebApp from '@twa-dev/sdk';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useI18n } from '../i18n';
 import { calculateCustomerMetrics, getClientRate, getCustomerBenefits } from '../lib/customer';
-import { getAssetConversionRate } from '../lib/rates';
+import { getAssetConversionRate, isBelowMinExchange, MIN_EXCHANGE_EUR } from '../lib/rates';
 import { getAssetCurrency, getAssetLabel, getDirectionFromGiveAsset } from '../lib/exchangeAssets';
 
 export default function Checkout() {
@@ -42,10 +42,15 @@ export default function Checkout() {
   const cityName = city ? (t(`cities.${city.cityKey}`).startsWith('cities.') ? city.cityKey : t(`cities.${city.cityKey}`)) : '-';
   const direction = getDirectionFromGiveAsset(selectedGiveAsset);
   const requiresWallet = selectedGetAsset === 'USDT';
-  const requiresContact = selectedGetAsset === 'EUR_CASH';
+  const requiresContact = selectedGetAsset === 'EUR_CASH' || selectedGiveAsset === 'UAH_CARD' || selectedGetAsset === 'UAH_CARD';
   const requiresCardNumber = selectedGiveAsset === 'UAH_CARD' || selectedGetAsset === 'UAH_CARD';
+  const giveAmountNumber = Number(giveAmount);
+  const isAmountTooSmall =
+    Number.isFinite(giveAmountNumber) &&
+    giveAmountNumber > 0 &&
+    isBelowMinExchange(giveAmountNumber, selectedGiveAsset, rates);
   // Remove reserve checking since we allow all amounts now
-  const isReserveBlocked = !city || !city.isActive;
+  const isReserveBlocked = !city || !city.isActive || isAmountTooSmall;
   const metrics = useMemo(
     () => calculateCustomerMetrics(orders, userHandle, currentUserId),
     [currentUserId, orders, userHandle],
@@ -61,7 +66,12 @@ export default function Checkout() {
   };
 
   const handleSubmit = async () => {
-    if (isReserveBlocked) {
+    if (isAmountTooSmall) {
+      setSubmitError(t('home.minAmountError', { amount: MIN_EXCHANGE_EUR }));
+      return;
+    }
+
+    if (!city || !city.isActive) {
       setSubmitError(t('checkout.reserveError'));
       return;
     }
@@ -320,6 +330,11 @@ export default function Checkout() {
       </div>
 
       <div className="pb-[32px] pt-[16px] mt-auto">
+        {isAmountTooSmall && (
+          <div className="mb-[16px] p-[12px] bg-[rgba(248,113,113,0.1)] border border-[rgba(248,113,113,0.2)] rounded-r text-[12px] text-error text-center">
+            {t('home.minAmountError', { amount: MIN_EXCHANGE_EUR })}
+          </div>
+        )}
         {submitError && (
           <div className="mb-[16px] p-[12px] bg-[rgba(248,113,113,0.1)] border border-[rgba(248,113,113,0.2)] rounded-r text-[12px] text-error text-center">
             {submitError}
