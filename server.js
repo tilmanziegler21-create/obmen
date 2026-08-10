@@ -161,8 +161,8 @@ function createDefaultState() {
       UAH_USDT: 1 / 44.82,
       EUR_UAH: 52.01,
     },
-    rateMode: 'manual',
-    rateSpread: 0.5,
+    rateMode: 'auto',
+    rateSpread: 4,
     rateUpdatedAt: new Date().toISOString(),
     orders: [],
     usdtReserve: 2500,
@@ -191,7 +191,11 @@ function normalizeState(rawState) {
       EUR_UAH: Number(raw.rates?.EUR_UAH) || defaults.rates.EUR_UAH,
     },
     rateMode: ['manual', 'auto'].includes(raw.rateMode) ? raw.rateMode : defaults.rateMode,
-    rateSpread: typeof raw.rateSpread === 'number' && !isNaN(raw.rateSpread) ? Number(raw.rateSpread) : defaults.rateSpread,
+    rateSpread: (() => {
+      const spread = typeof raw.rateSpread === 'number' && !isNaN(raw.rateSpread) ? Number(raw.rateSpread) : defaults.rateSpread;
+      // Старый дефолт 0.5 ломал клиентскую комиссию
+      return spread === 0.5 ? 4 : spread;
+    })(),
     rateUpdatedAt: ensureString(raw.rateUpdatedAt) || defaults.rateUpdatedAt,
     orders: Array.isArray(raw.orders)
       ? raw.orders.map((order) => ({
@@ -890,7 +894,6 @@ async function fetchUsdtUahRate() {
 async function fetchBinanceRate() {
   try {
     const state = readState();
-    if (state.rateMode !== 'auto') return;
 
     const [eurResult, uahResult] = await Promise.all([
       fetchEurUsdtRate(),
@@ -899,18 +902,18 @@ async function fetchBinanceRate() {
 
     let changed = false;
 
-    if (eurResult) {
+    // EUR обновляем из рынка только в auto; в manual оставляем ручной EUR
+    if (state.rateMode === 'auto' && eurResult) {
       state.rates.EUR_USDT = Number(eurResult.eurUsdt.toFixed(4));
       changed = true;
     }
 
+    // UAH всегда тянем с рынка — иначе гривна зависает на дефолте
     if (uahResult) {
       state.rates.UAH_USDT = Number((1 / uahResult.usdtUah).toFixed(8));
       changed = true;
     }
 
-    // EUR_UAH = UAH за 1 EUR = (USDT за 1 EUR) / (USDT за 1 UAH) = EUR_USDT / UAH_USDT
-    // либо через usdtUah: EUR_USDT * usdtUah
     if (state.rates.EUR_USDT > 0 && state.rates.UAH_USDT > 0) {
       state.rates.EUR_UAH = Number((state.rates.EUR_USDT / state.rates.UAH_USDT).toFixed(2));
       changed = true;
@@ -924,7 +927,7 @@ async function fetchBinanceRate() {
     state.rateUpdatedAt = new Date().toISOString();
     writeState(state);
     console.log(
-      `[Rates] Updated via EUR=${eurResult?.source || 'keep'}, UAH=${uahResult?.source || 'keep'}. ` +
+      `[Rates] Updated via EUR=${state.rateMode === 'auto' ? (eurResult?.source || 'keep') : 'manual'}, UAH=${uahResult?.source || 'keep'}. ` +
       `EUR/USDT: ${state.rates.EUR_USDT}, UAH/USDT: ${(1 / state.rates.UAH_USDT).toFixed(2)}, EUR/UAH: ${state.rates.EUR_UAH}`,
     );
   } catch (e) {
@@ -937,7 +940,18 @@ setInterval(fetchBinanceRate, 60 * 1000);
 // И один раз при старте
 fetchBinanceRate();
 
-app.get('/api/bootstrap', (_req, res) => {
+app.get('/api/bootstrap', async (_req, res) => {
+  try {
+    const state = readState();
+    const updatedAtMs = Date.parse(state.rateUpdatedAt);
+    const isStale = !Number.isFinite(updatedAtMs) || Date.now() - updatedAtMs > 60_000;
+    if (isStale) {
+      await fetchBinanceRate();
+    }
+  } catch (error) {
+    console.error('[Rates] bootstrap refresh failed', error);
+  }
+
   res.json(getPublicState(readState()));
 });
 
@@ -1034,21 +1048,32 @@ app.delete('/api/admin/cities/:id', requireAdmin, (req, res) => {
 
 app.patch('/api/admin/settings', requireAdmin, async (req, res) => {
   const state = readState();
-  let shouldFetchBinance = false;
 
   if (req.body?.rate !== undefined) {
     state.rates.EUR_USDT = Number(req.body.rate) || state.rates.EUR_USDT;
     state.rateUpdatedAt = new Date().toISOString();
   }
 
+  // usdtUah = сколько гривен за 1 USDT (опциональный ручной ввод)
+  if (req.body?.usdtUah !== undefined) {
+    const usdtUah = Number(req.body.usdtUah);
+    if (Number.isFinite(usdtUah) && usdtUah > 0) {
+      state.rates.UAH_USDT = Number((1 / usdtUah).toFixed(8));
+      state.rateUpdatedAt = new Date().toISOString();
+    }
+  }
+
   if (req.body?.rateMode !== undefined) {
     state.rateMode = ['manual', 'auto'].includes(req.body.rateMode) ? req.body.rateMode : state.rateMode;
-    if (state.rateMode === 'auto') shouldFetchBinance = true;
   }
 
   if (req.body?.rateSpread !== undefined) {
-    state.rateSpread = Number(req.body.rateSpread) || 0;
-    if (state.rateMode === 'auto') shouldFetchBinance = true;
+    const nextSpread = Number(req.body.rateSpread);
+    state.rateSpread = Number.isFinite(nextSpread) ? Math.max(0, Math.min(20, nextSpread)) : state.rateSpread;
+  }
+
+  if (state.rates.EUR_USDT > 0 && state.rates.UAH_USDT > 0) {
+    state.rates.EUR_UAH = Number((state.rates.EUR_USDT / state.rates.UAH_USDT).toFixed(2));
   }
 
   if (req.body?.usdtReserve !== undefined) {
@@ -1065,12 +1090,9 @@ app.patch('/api/admin/settings', requireAdmin, async (req, res) => {
 
   writeState(state);
 
-  if (shouldFetchBinance) {
-    await fetchBinanceRate();
-    res.json({ ok: true, state: getPublicState(readState()) });
-  } else {
-    res.json({ ok: true, state: getPublicState(state) });
-  }
+  // auto: EUR+UAH с рынка; manual: EUR не затираем, UAH обновляем
+  await fetchBinanceRate();
+  res.json({ ok: true, state: getPublicState(readState()) });
 });
 
 app.patch('/api/admin/orders/:id', requireAdmin, async (req, res) => {

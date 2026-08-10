@@ -5,7 +5,7 @@ import { useStore } from '../store';
 import WebApp from '@twa-dev/sdk';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useI18n } from '../i18n';
-import { calculateCustomerMetrics, getClientRate, getCustomerBenefits } from '../lib/customer';
+import { calculateCustomerMetrics, getClientRate, getCustomerBenefits, resolveBaseCommissionPercent } from '../lib/customer';
 import { getAssetConversionRate, isBelowMinExchange, MIN_EXCHANGE_EUR } from '../lib/rates';
 import { getAssetCurrency, getAssetLabel, getDirectionFromGiveAsset } from '../lib/exchangeAssets';
 
@@ -17,7 +17,7 @@ export default function Checkout() {
   const telegramUserId = WebApp.initDataUnsafe?.user?.id ?? null;
   const { 
     cities, selectedCityId, selectedGiveAsset, selectedGetAsset, rates, antiPhishingCode, checkoutPrefill, orders, profileSettings,
-    giveAmount, getAmount, clearCheckoutPrefill, setCommissionPercent, createOrder
+    giveAmount, getAmount, rateSpread, clearCheckoutPrefill, setCommissionPercent, createOrder
   } = useStore();
   const NETWORKS = [
     { id: 'TRC-20', label: 'TRC-20', time: t('checkout.networkTimes.trc20') },
@@ -56,8 +56,8 @@ export default function Checkout() {
     [currentUserId, orders, userHandle],
   );
   const benefits = useMemo(
-    () => getCustomerBenefits(metrics, profileSettings.activatedReferralCode, useStore.getState().rateSpread),
-    [metrics, profileSettings.activatedReferralCode],
+    () => getCustomerBenefits(metrics, profileSettings.activatedReferralCode, resolveBaseCommissionPercent(rateSpread)),
+    [metrics, profileSettings.activatedReferralCode, rateSpread],
   );
 
   const handleBack = () => {

@@ -149,3 +149,19 @@ export function getClientRate(
   // Комиссия всегда уменьшает курс для клиента — как в calculateGetAmount (* multiplier)
   return baseRate * multiplier;
 }
+
+/** Базовая комиссия обменника = rateSpread из админки (по умолчанию 4%) */
+export const DEFAULT_COMMISSION_PERCENT = 4;
+
+export function resolveBaseCommissionPercent(rateSpread?: number): number {
+  if (typeof rateSpread !== 'number' || !Number.isFinite(rateSpread) || rateSpread < 0) {
+    return DEFAULT_COMMISSION_PERCENT;
+  }
+
+  // Защита от старого дефолта 0.5, который ошибочно подставлялся как комиссия
+  if (rateSpread === 0.5) {
+    return DEFAULT_COMMISSION_PERCENT;
+  }
+
+  return Math.min(20, rateSpread);
+}

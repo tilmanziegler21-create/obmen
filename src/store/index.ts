@@ -62,8 +62,8 @@ export const useStore = create<ExchangeState>()(
     (set, get) => ({
       cities: INITIAL_CITIES,
       rates: DEFAULT_RATES,
-      rateMode: 'manual',
-      rateSpread: 0.5,
+      rateMode: 'auto',
+      rateSpread: 4,
       rateUpdatedAt: new Date().toISOString(),
       orders: [],
       usdtReserve: 2500,
@@ -510,7 +510,7 @@ export const useStore = create<ExchangeState>()(
     }),
     {
       name: 'cryptobull-storage',
-      version: 11,
+      version: 12,
       // Persist core admin and order data, reset user inputs on reload
       partialize: (state) => ({
         cities: state.cities,
@@ -558,8 +558,9 @@ export const useStore = create<ExchangeState>()(
             ...DEFAULT_RATES,
             ...(state.rates ?? {}),
           },
-          rateMode: state.rateMode ?? 'manual',
-          rateSpread: state.rateSpread ?? 0.5,
+          rateMode: state.rateMode === 'manual' ? 'manual' : 'auto',
+          // Старый дефолт 0.5 ломал комиссию (подставлялся вместо 4%)
+          rateSpread: state.rateSpread === 0.5 || state.rateSpread == null ? 4 : state.rateSpread,
           rateUpdatedAt: state.rateUpdatedAt ?? new Date().toISOString(),
           antiPhishingCode: state.antiPhishingCode ?? DEFAULT_ANTI_PHISHING_CODE,
           supportLink: state.supportLink ?? 'cryptobull_manager',
@@ -567,7 +568,7 @@ export const useStore = create<ExchangeState>()(
             ...DEFAULT_PROFILE_SETTINGS,
             ...(state.profileSettings ?? {}),
           },
-          commissionPercent: 4,
+          commissionPercent: state.rateSpread === 0.5 || state.rateSpread == null ? 4 : Math.max(0, Math.min(4, Number(state.rateSpread) || 4)),
           cities: state.cities.map((city) => {
             const legacyCity = city as City & { name?: string };
 

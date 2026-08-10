@@ -5,9 +5,9 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { useI18n } from '../i18n';
 import LanguageSwitcher from '../components/LanguageSwitcher';
-import { calculateCustomerMetrics, getCustomerBenefits, isOrderOwnedByUser } from '../lib/customer';
+import { calculateCustomerMetrics, getCustomerBenefits, isOrderOwnedByUser, resolveBaseCommissionPercent } from '../lib/customer';
 import { getAllowedTargetAssets, getAssetCurrency, getAssetLabel } from '../lib/exchangeAssets';
-import { getAssetConversionRate, isBelowMinExchange, MIN_EXCHANGE_EUR } from '../lib/rates';
+import { getReadableRatePresentation, isBelowMinExchange, MIN_EXCHANGE_EUR } from '../lib/rates';
 
 const MOCK_REVIEWS = [
   { id: 1, name: 'Alex M.', text: 'Быстрый обмен в Берлине, курьер приехал вовремя. Рекомендую!', rating: 5, date: '19.06.2026' },
@@ -91,6 +91,7 @@ export default function Home() {
     giveAmount,
     getAmount,
     supportLink,
+    rateSpread,
     setCity,
     setGiveAmount,
     setGiveAsset,
@@ -145,8 +146,8 @@ export default function Home() {
     [currentUserHandle, currentUserId, orders],
   );
   const benefits = useMemo(
-    () => getCustomerBenefits(metrics, profileSettings.activatedReferralCode, useStore.getState().rateSpread),
-    [metrics, profileSettings.activatedReferralCode],
+    () => getCustomerBenefits(metrics, profileSettings.activatedReferralCode, resolveBaseCommissionPercent(rateSpread)),
+    [metrics, profileSettings.activatedReferralCode, rateSpread],
   );
 
   useEffect(() => {
@@ -244,7 +245,12 @@ export default function Home() {
     }
   };
 
-  const currentRate = getAssetConversionRate(selectedGiveAsset, selectedGetAsset, rates);
+  const ratePresentation = getReadableRatePresentation(
+    selectedGiveAsset,
+    selectedGetAsset,
+    rates,
+    benefits.effectiveCommissionPercent,
+  );
   const giveAssetOptions = ['EUR_CASH', 'UAH_CARD', 'USDT'] as const;
   const getAssetOptions = getAllowedTargetAssets(selectedGiveAsset);
 
@@ -511,7 +517,7 @@ export default function Home() {
                 </div>
                 <div className="flex items-center gap-[6px]">
                   <span className="text-[13px] font-[600] text-[#FFFFFF]">
-                    1 {getAssetLabel(selectedGiveAsset, language)} = {currentRate.toFixed(4)} {getAssetCurrency(selectedGetAsset)}
+                    1 {ratePresentation.leftLabelCurrency} = {ratePresentation.rightValue} {ratePresentation.rightCurrency}
                   </span>
                 </div>
               </div>

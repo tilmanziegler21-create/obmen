@@ -5,12 +5,12 @@ import WebApp from '@twa-dev/sdk';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useStore } from '../store';
 import { useI18n } from '../i18n';
-import { calculateCustomerMetrics, getCustomerBenefits } from '../lib/customer';
+import { calculateCustomerMetrics, getCustomerBenefits, resolveBaseCommissionPercent } from '../lib/customer';
 
 export default function Profile() {
   const navigate = useNavigate();
   const { t, language } = useI18n();
-  const { orders, antiPhishingCode, profileSettings, updateProfileSettings } = useStore();
+  const { orders, antiPhishingCode, profileSettings, rateSpread, updateProfileSettings } = useStore();
   const user = WebApp.initDataUnsafe?.user;
   const currentUserId = user?.id ? String(user.id) : null;
   const adminIds = (import.meta.env.VITE_ADMIN_IDS || '').split(',').map((id: string) => id.trim());
@@ -24,8 +24,8 @@ export default function Profile() {
     [currentUserHandle, currentUserId, orders],
   );
   const benefits = useMemo(
-    () => getCustomerBenefits(metrics, profileSettings.activatedReferralCode),
-    [metrics, profileSettings.activatedReferralCode],
+    () => getCustomerBenefits(metrics, profileSettings.activatedReferralCode, resolveBaseCommissionPercent(rateSpread)),
+    [metrics, profileSettings.activatedReferralCode, rateSpread],
   );
   const currentUserStats = useMemo(
     () =>

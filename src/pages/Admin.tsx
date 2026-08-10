@@ -39,9 +39,11 @@ export default function Admin() {
   const adminIds = (import.meta.env.VITE_ADMIN_IDS || '').split(',').map((id: string) => id.trim());
   const isAdmin = user?.id ? adminIds.includes(user.id.toString()) : false;
 
-  const [editRateMode, setEditRateMode] = useState<'manual' | 'auto'>(useStore.getState().rateMode || 'manual');
+  const [editRateMode, setEditRateMode] = useState<'manual' | 'auto'>(useStore.getState().rateMode || 'auto');
   const [editRate, setEditRate] = useState(rates.EUR_USDT.toString());
-  const [editRateSpread, setEditRateSpread] = useState(useStore.getState().rateSpread.toString());
+  const [editRateSpread, setEditRateSpread] = useState(
+    useStore.getState().rateSpread === 0.5 ? '4' : useStore.getState().rateSpread.toString(),
+  );
   const [editUsdtReserve, setEditUsdtReserve] = useState(usdtReserve.toString());
   const [editAntiPhishingCode, setEditAntiPhishingCode] = useState(antiPhishingCode);
   const [editSupportLink, setEditSupportLink] = useState(useStore.getState().supportLink || 'cryptobull_manager');
@@ -253,7 +255,7 @@ export default function Admin() {
           <div className="flex justify-between items-center mb-[8px]">
             <h2 className="text-[14px] font-[700] text-text">{t('admin.rateManagement')}</h2>
             <span className="text-[10px] bg-[rgba(79,142,247,0.12)] text-[#4F8EF7] px-[8px] py-[4px] rounded-[6px] uppercase tracking-[0.06em] font-[600]">
-              EUR/USDT
+              EUR / UAH / USDT
             </span>
           </div>
 
@@ -268,53 +270,78 @@ export default function Admin() {
               onClick={() => setEditRateMode('auto')}
               className={`flex-1 py-[8px] text-[12px] font-[600] rounded-[8px] transition-all ${editRateMode === 'auto' ? 'bg-[#4F8EF7] text-white shadow-md' : 'text-muted hover:text-text'}`}
             >
-              Авто (Binance)
+              Авто (рынок)
             </button>
           </div>
 
           <div className="space-y-[8px]">
             <div className="text-[11px] font-[600] uppercase tracking-[0.06em] text-muted">
-              {editRateMode === 'auto' ? 'Комиссия обменника (Спред, %)' : t('admin.rateInputLabel')}
+              Комиссия обменника (Спред, %)
             </div>
             <div className="flex items-center gap-[8px]">
               <div className="flex-1 relative">
-                <span className="absolute left-[12px] top-1/2 -translate-y-1/2 text-muted font-mono">
-                  {editRateMode === 'auto' ? '%' : '€'}
-                </span>
+                <span className="absolute left-[12px] top-1/2 -translate-y-1/2 text-muted font-mono">%</span>
                 <input
                   type="number"
-                  step={editRateMode === 'auto' ? "0.1" : "0.0001"}
-                  value={editRateMode === 'auto' ? editRateSpread : editRate}
-                  onChange={(e) => editRateMode === 'auto' ? setEditRateSpread(e.target.value) : setEditRate(e.target.value)}
+                  step="0.1"
+                  value={editRateSpread}
+                  onChange={(e) => setEditRateSpread(e.target.value)}
                   className="w-full bg-bg3 border border-border2 rounded-[8px] py-[10px] pl-[28px] pr-[12px] text-[14px] font-mono text-text outline-none focus:border-[#4F8EF7] transition-colors"
                 />
               </div>
-              <button
-                onClick={async () => {
-                  WebApp.HapticFeedback.impactOccurred('medium');
-                  await updateRateConfig({ 
-                    rateMode: editRateMode, 
-                    rateSpread: Number(editRateSpread), 
-                    rate: Number(editRate) 
-                  });
-                  WebApp.HapticFeedback.notificationOccurred('success');
-                }}
-                className="bg-bg3 border border-border2 hover:border-[#4F8EF7] hover:text-[#4F8EF7] text-muted px-[16px] py-[10px] rounded-[8px] text-[12px] font-[600] transition-colors"
-              >
-                {t('admin.save')}
-              </button>
             </div>
-            {editRateMode === 'auto' && (
-              <div className="text-[11px] text-[#4F8EF7] mt-[4px]">
-                *Курс парсится с Binance. Ваша комиссия будет автоматически вычитаться в пользу обменника при любом направлении.
-              </div>
-            )}
           </div>
+
+          {editRateMode === 'manual' && (
+            <div className="space-y-[8px]">
+              <div className="text-[11px] font-[600] uppercase tracking-[0.06em] text-muted">
+                {t('admin.rateInputLabel')} (EUR→USDT)
+              </div>
+              <div className="relative">
+                <span className="absolute left-[12px] top-1/2 -translate-y-1/2 text-muted font-mono">€</span>
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={editRate}
+                  onChange={(e) => setEditRate(e.target.value)}
+                  className="w-full bg-bg3 border border-border2 rounded-[8px] py-[10px] pl-[28px] pr-[12px] text-[14px] font-mono text-text outline-none focus:border-[#4F8EF7] transition-colors"
+                />
+              </div>
+              <div className="text-[11px] text-muted">
+                Курс UAH подтягивается с рынка автоматически даже в ручном режиме.
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={async () => {
+              WebApp.HapticFeedback.impactOccurred('medium');
+              await updateRateConfig({
+                rateMode: editRateMode,
+                rateSpread: Number(editRateSpread),
+                rate: Number(editRate),
+              });
+              WebApp.HapticFeedback.notificationOccurred('success');
+            }}
+            className="w-full bg-bg3 border border-border2 hover:border-[#4F8EF7] hover:text-[#4F8EF7] text-muted px-[16px] py-[10px] rounded-[8px] text-[12px] font-[600] transition-colors"
+          >
+            {t('admin.save')}
+          </button>
+
+          {editRateMode === 'auto' && (
+            <div className="text-[11px] text-[#4F8EF7] mt-[4px]">
+              *EUR и UAH парсятся с рынка (Binance → Coinbase). Комиссия вычитается при любом направлении.
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-[10px] md:grid-cols-2">
             <div className="rounded-[12px] border border-border2 bg-bg3 px-[12px] py-[10px]">
               <div className="text-[11px] font-[600] uppercase tracking-[0.06em] text-muted">{t('admin.rateCurrentLabel')}</div>
-              <div className="mt-[6px] font-mono text-[16px] font-[700] text-text">1 EUR = {rates.EUR_USDT.toFixed(4)} USDT</div>
+              <div className="mt-[6px] font-mono text-[14px] font-[700] text-text">1 EUR = {rates.EUR_USDT.toFixed(4)} USDT</div>
+              <div className="mt-[4px] font-mono text-[14px] font-[700] text-text">
+                1 USDT = {rates.UAH_USDT > 0 ? (1 / rates.UAH_USDT).toFixed(2) : '—'} UAH
+              </div>
+              <div className="mt-[4px] font-mono text-[14px] font-[700] text-text">1 EUR = {rates.EUR_UAH.toFixed(2)} UAH</div>
             </div>
             <div className="rounded-[12px] border border-border2 bg-bg3 px-[12px] py-[10px]">
               <div className="text-[11px] font-[600] uppercase tracking-[0.06em] text-muted">{t('admin.rateUpdatedLabel')}</div>

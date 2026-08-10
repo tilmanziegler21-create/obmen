@@ -96,6 +96,60 @@ export function convertBetweenAssets(amount: number, fromAsset: ExchangeAsset, t
   return amount * getAssetConversionRate(fromAsset, toAsset, rates);
 }
 
+export function formatDisplayRate(rate: number): string {
+  if (!Number.isFinite(rate) || rate <= 0) {
+    return '0';
+  }
+
+  if (rate >= 100) {
+    return rate.toFixed(2);
+  }
+
+  if (rate >= 1) {
+    return rate.toFixed(4);
+  }
+
+  if (rate >= 0.01) {
+    return rate.toFixed(4);
+  }
+
+  return rate.toFixed(6);
+}
+
+/**
+ * Для мелких курсов (UAH -> USDT ~0.02) показываем инвертированный вид:
+ * "1 USDT = 44.82 UAH", чтобы курс выглядел привычно.
+ */
+export function getReadableRatePresentation(
+  fromAsset: ExchangeAsset,
+  toAsset: ExchangeAsset,
+  rates: Rates,
+  commissionPercent: number,
+): { leftLabelCurrency: string; rightValue: string; rightCurrency: string; inverted: boolean } {
+  const fromCurrency = getAssetCurrency(fromAsset);
+  const toCurrency = getAssetCurrency(toAsset);
+  const baseRate = getAssetConversionRate(fromAsset, toAsset, rates);
+  const multiplier = Math.max(0, 1 - commissionPercent / 100);
+  const clientRate = baseRate * multiplier;
+
+  const shouldInvert = clientRate > 0 && clientRate < 0.1;
+  if (shouldInvert) {
+    return {
+      leftLabelCurrency: toCurrency,
+      rightValue: formatDisplayRate(1 / clientRate),
+      rightCurrency: fromCurrency,
+      inverted: true,
+    };
+  }
+
+  return {
+    leftLabelCurrency: fromCurrency,
+    rightValue: formatDisplayRate(clientRate),
+    rightCurrency: toCurrency,
+    inverted: false,
+  };
+}
+
 export function roundAmountForAsset(asset: ExchangeAsset, amount: number): number {
   if (!Number.isFinite(amount) || amount <= 0) {
     return 0;
