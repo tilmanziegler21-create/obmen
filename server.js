@@ -18,6 +18,9 @@ const botToken = (process.env.VITE_BOT_TOKEN || process.env.BOT_TOKEN || '').tri
 const fallbackChatId = (process.env.VITE_CHAT_ID || process.env.CHAT_ID || '').trim();
 const publicBaseUrl = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
 const requireTelegramInit = process.env.REQUIRE_TELEGRAM_INIT === 'true';
+const startVideoFileIdEnv = (process.env.START_VIDEO_FILE_ID || '').trim();
+const startVideoUrlEnv = (process.env.START_VIDEO_URL || '').trim();
+const startVideoPath = path.join(__dirname, 'public', 'start.mp4');
 const adminIds = new Set(
   (process.env.ADMIN_IDS || process.env.VITE_ADMIN_IDS || '')
     .split(',')
@@ -165,6 +168,7 @@ function createDefaultState() {
     usdtReserve: 2500,
     antiPhishingCode: 'BULL',
     supportLink: 'cryptobull_manager',
+    startVideoFileId: '',
   };
 }
 
@@ -210,6 +214,7 @@ function normalizeState(rawState) {
     usdtReserve: Number(raw.usdtReserve) || defaults.usdtReserve,
     antiPhishingCode: ensureString(raw.antiPhishingCode) || defaults.antiPhishingCode,
     supportLink: ensureString(raw.supportLink) || defaults.supportLink,
+    startVideoFileId: ensureString(raw.startVideoFileId) || defaults.startVideoFileId,
   };
 }
 
@@ -543,6 +548,158 @@ async function sendTelegramMessage(chatId, message, replyMarkup) {
   });
 }
 
+function getStartReplyMarkup() {
+  if (!publicBaseUrl) {
+    return undefined;
+  }
+
+  return {
+    inline_keyboard: [
+      [
+        {
+          text: 'ОБМЕН',
+          web_app: { url: publicBaseUrl },
+        },
+      ],
+    ],
+  };
+}
+
+function getStartCaption() {
+  return [
+    '👋 <b>Добро пожаловать в CryptoBull!</b>',
+    '',
+    'Нажмите кнопку <b>ОБМЕН</b> ниже, чтобы открыть приложение и создать заявку.',
+  ].join('\n');
+}
+
+async function callTelegramMultipart(method, formData) {
+  const url = `https://api.telegram.org/bot${botToken}/${method}`;
+  console.log(`[Telegram API] Calling multipart ${method}`);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, 60000);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeout);
+
+    const data = await response.json().catch(() => ({}));
+    console.log(`[Telegram API] Response from ${method}:`, JSON.stringify(data));
+
+    if (!response.ok || data.ok === false) {
+      const errorMessage = typeof data.description === 'string' ? data.description : 'Telegram API error';
+      throw new Error(errorMessage);
+    }
+
+    return data.result;
+  } catch (error) {
+    clearTimeout(timeout);
+    if (error.name === 'AbortError') {
+      throw new Error('Telegram API timeout (60s)');
+    }
+    throw error;
+  }
+}
+
+function resolveStartVideoSource(state) {
+  const cachedFileId = ensureString(state?.startVideoFileId) || startVideoFileIdEnv;
+  if (cachedFileId) {
+    return { type: 'file_id', value: cachedFileId };
+  }
+
+  if (startVideoUrlEnv) {
+    return { type: 'url', value: startVideoUrlEnv };
+  }
+
+  if (publicBaseUrl && fs.existsSync(startVideoPath)) {
+    return { type: 'url', value: `${publicBaseUrl}/start.mp4` };
+  }
+
+  if (fs.existsSync(startVideoPath)) {
+    return { type: 'file', value: startVideoPath };
+  }
+
+  return null;
+}
+
+async function sendStartWelcome(chatId) {
+  const replyMarkup = getStartReplyMarkup();
+  const caption = getStartCaption();
+  const state = readState();
+  const videoSource = resolveStartVideoSource(state);
+
+  if (!videoSource) {
+    console.warn('[Telegram] start.mp4 not found — sending text welcome only');
+    return sendTelegramMessage(chatId, caption, replyMarkup);
+  }
+
+  if (videoSource.type === 'file') {
+    const formData = new FormData();
+    const fileBuffer = fs.readFileSync(videoSource.value);
+    formData.append('chat_id', String(chatId));
+    formData.append('caption', caption);
+    formData.append('parse_mode', 'HTML');
+    formData.append('supports_streaming', 'true');
+    if (replyMarkup) {
+      formData.append('reply_markup', JSON.stringify(replyMarkup));
+    }
+    formData.append('video', new Blob([fileBuffer], { type: 'video/mp4' }), 'start.mp4');
+
+    const result = await callTelegramMultipart('sendVideo', formData);
+    const fileId = result?.video?.file_id;
+    if (fileId && state.startVideoFileId !== fileId) {
+      state.startVideoFileId = fileId;
+      writeState(state);
+      console.log('[Telegram] Cached start video file_id');
+    }
+    return result;
+  }
+
+  const result = await callTelegram('sendVideo', {
+    chat_id: chatId,
+    video: videoSource.value,
+    caption,
+    parse_mode: 'HTML',
+    supports_streaming: true,
+    reply_markup: replyMarkup,
+  });
+
+  const fileId = result?.video?.file_id;
+  if (fileId && state.startVideoFileId !== fileId) {
+    state.startVideoFileId = fileId;
+    writeState(state);
+    console.log('[Telegram] Cached start video file_id');
+  }
+
+  return result;
+}
+
+async function handleStartCommand(message) {
+  const chatId = message?.chat?.id;
+  if (!chatId) {
+    return;
+  }
+
+  try {
+    await sendStartWelcome(chatId);
+  } catch (error) {
+    console.error('[Telegram] Failed to send /start welcome:', error.message);
+    try {
+      await sendTelegramMessage(chatId, getStartCaption(), getStartReplyMarkup());
+    } catch (fallbackError) {
+      console.error('[Telegram] Failed to send /start text fallback:', fallbackError.message);
+    }
+  }
+}
+
 async function editTelegramMessage(order, isVerified) {
   if (!order.telegramChatId || !order.telegramMessageId) {
     return;
@@ -632,7 +789,7 @@ async function ensureTelegramWebhook() {
   try {
     await callTelegram('setWebhook', {
       url: `${publicBaseUrl}/api/telegram/webhook`,
-      allowed_updates: ['callback_query'],
+      allowed_updates: ['callback_query', 'message'],
     });
   } catch (error) {
     console.error('Failed to set Telegram webhook', error);
@@ -1111,6 +1268,16 @@ app.post('/api/orders', async (req, res) => {
 });
 
 app.post('/api/telegram/webhook', async (req, res) => {
+  const message = req.body?.message;
+  const messageText = ensureString(message?.text);
+  if (messageText === '/start' || messageText.startsWith('/start ')) {
+    res.json({ ok: true });
+    handleStartCommand(message).catch((error) => {
+      console.error('Failed to process /start command', error);
+    });
+    return;
+  }
+
   const callbackQuery = req.body?.callback_query;
   const callbackData = ensureString(callbackQuery?.data);
 
@@ -1167,7 +1334,12 @@ app.post('/api/telegram/set-webhook', async (_req, res) => {
 
 if (fs.existsSync(distDir)) {
   app.use(express.static(distDir));
+}
 
+// Раздаём public/ (в т.ч. start.mp4 для /start), даже без dist
+app.use(express.static(path.join(__dirname, 'public')));
+
+if (fs.existsSync(distDir)) {
   app.get(/^(?!\/api).*/, (_req, res) => {
     res.sendFile(path.join(distDir, 'index.html'));
   });
