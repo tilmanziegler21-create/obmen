@@ -41,9 +41,6 @@ export default function Admin() {
 
   const [editRateMode, setEditRateMode] = useState<'manual' | 'auto'>(useStore.getState().rateMode || 'auto');
   const [editRate, setEditRate] = useState(rates.EUR_USDT.toString());
-  const [editRateSpread, setEditRateSpread] = useState(
-    useStore.getState().rateSpread === 0.5 ? '4' : useStore.getState().rateSpread.toString(),
-  );
   const [editUsdtReserve, setEditUsdtReserve] = useState(usdtReserve.toString());
   const [editAntiPhishingCode, setEditAntiPhishingCode] = useState(antiPhishingCode);
   const [editSupportLink, setEditSupportLink] = useState(useStore.getState().supportLink || 'cryptobull_manager');
@@ -276,19 +273,12 @@ export default function Admin() {
 
           <div className="space-y-[8px]">
             <div className="text-[11px] font-[600] uppercase tracking-[0.06em] text-muted">
-              Комиссия обменника (Спред, %)
+              Комиссия обменника
             </div>
-            <div className="flex items-center gap-[8px]">
-              <div className="flex-1 relative">
-                <span className="absolute left-[12px] top-1/2 -translate-y-1/2 text-muted font-mono">%</span>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={editRateSpread}
-                  onChange={(e) => setEditRateSpread(e.target.value)}
-                  className="w-full bg-bg3 border border-border2 rounded-[8px] py-[10px] pl-[28px] pr-[12px] text-[14px] font-mono text-text outline-none focus:border-[#4F8EF7] transition-colors"
-                />
-              </div>
+            <div className="rounded-[12px] border border-border2 bg-bg3 px-[12px] py-[10px] text-[13px] font-[500] text-text">
+              Продажа USDT — <span className="font-mono font-[700]">1%</span>
+              <span className="text-muted"> · </span>
+              Остальные направления — <span className="font-mono font-[700]">4%</span>
             </div>
           </div>
 
@@ -318,7 +308,6 @@ export default function Admin() {
               WebApp.HapticFeedback.impactOccurred('medium');
               await updateRateConfig({
                 rateMode: editRateMode,
-                rateSpread: Number(editRateSpread),
                 rate: Number(editRate),
               });
               WebApp.HapticFeedback.notificationOccurred('success');
@@ -330,7 +319,7 @@ export default function Admin() {
 
           {editRateMode === 'auto' && (
             <div className="text-[11px] text-[#4F8EF7] mt-[4px]">
-              *EUR и UAH парсятся с рынка (Binance → Coinbase). Комиссия вычитается при любом направлении.
+              *EUR и UAH парсятся с рынка (Binance → Coinbase). Комиссия: продажа USDT 1%, остальные обмены 4%.
             </div>
           )}
 

@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { useI18n } from '../i18n';
 import LanguageSwitcher from '../components/LanguageSwitcher';
-import { calculateCustomerMetrics, getCustomerBenefits, isOrderOwnedByUser, resolveBaseCommissionPercent } from '../lib/customer';
+import { calculateCustomerMetrics, getBenefitsForGiveAsset, isOrderOwnedByUser } from '../lib/customer';
 import { getAllowedTargetAssets, getAssetCurrency, getAssetLabel } from '../lib/exchangeAssets';
 import { getReadableRatePresentation, isBelowMinExchange, MIN_EXCHANGE_EUR } from '../lib/rates';
 
@@ -91,7 +91,6 @@ export default function Home() {
     giveAmount,
     getAmount,
     supportLink,
-    rateSpread,
     setCity,
     setGiveAmount,
     setGiveAsset,
@@ -146,8 +145,8 @@ export default function Home() {
     [currentUserHandle, currentUserId, orders],
   );
   const benefits = useMemo(
-    () => getCustomerBenefits(metrics, profileSettings.activatedReferralCode, resolveBaseCommissionPercent(rateSpread)),
-    [metrics, profileSettings.activatedReferralCode, rateSpread],
+    () => getBenefitsForGiveAsset(metrics, profileSettings.activatedReferralCode, selectedGiveAsset),
+    [metrics, profileSettings.activatedReferralCode, selectedGiveAsset],
   );
 
   useEffect(() => {

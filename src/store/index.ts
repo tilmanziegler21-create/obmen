@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import WebApp from '@twa-dev/sdk';
 import { ExchangeState, City, ExchangeOrder, type ExchangeAsset, type SaveResult } from '../types';
-import { generateReferralCode, getCommissionMultiplier } from '../lib/customer';
+import { generateReferralCode, getBaseCommissionPercent, getCommissionMultiplier } from '../lib/customer';
 import { DEFAULT_RATES, convertBetweenAssets, getAssetConversionRate, roundAmountForAsset } from '../lib/rates';
 import { getAllowedTargetAssets, getDefaultTargetAsset, getDirectionFromGiveAsset, inferOrderAssets } from '../lib/exchangeAssets';
 
@@ -305,6 +305,7 @@ export const useStore = create<ExchangeState>()(
           direction: dir,
           selectedGiveAsset: nextGiveAsset,
           selectedGetAsset: getDefaultTargetAsset(nextGiveAsset),
+          commissionPercent: getBaseCommissionPercent(nextGiveAsset),
           giveAmount: '',
           getAmount: '',
         });
@@ -316,6 +317,7 @@ export const useStore = create<ExchangeState>()(
             ? state.selectedGetAsset
             : getDefaultTargetAsset(asset),
           direction: getDirectionFromGiveAsset(asset),
+          commissionPercent: getBaseCommissionPercent(asset),
         }));
         const { giveAmount, getAmount } = get();
         if (giveAmount) {
@@ -451,7 +453,10 @@ export const useStore = create<ExchangeState>()(
         }
         
         const amount = Number(giveAmount);
-        const multiplier = getCommissionMultiplier(commissionPercent);
+        // Продажа USDT всегда 1%, остальное — текущая комиссия (база 4% со скидками)
+        const appliedCommission =
+          selectedGiveAsset === 'USDT' ? getBaseCommissionPercent('USDT') : commissionPercent;
+        const multiplier = getCommissionMultiplier(appliedCommission);
         const result = roundAmountForAsset(
           selectedGetAsset,
           convertBetweenAssets(amount, selectedGiveAsset, selectedGetAsset, rates) * multiplier,
@@ -467,7 +472,9 @@ export const useStore = create<ExchangeState>()(
         }
         
         const amount = Number(getAmount);
-        const multiplier = getCommissionMultiplier(commissionPercent);
+        const appliedCommission =
+          selectedGiveAsset === 'USDT' ? getBaseCommissionPercent('USDT') : commissionPercent;
+        const multiplier = getCommissionMultiplier(appliedCommission);
         const baseRate = getAssetConversionRate(selectedGiveAsset, selectedGetAsset, rates);
         const result = baseRate === 0 ? 0 : amount / (baseRate * multiplier);
         set({
