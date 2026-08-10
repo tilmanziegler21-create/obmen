@@ -3,6 +3,7 @@ import { getAssetCurrency } from './exchangeAssets';
 
 export const DEFAULT_UAH_PER_USDT = 44.82;
 export const DEFAULT_EUR_UAH = 52.01;
+export const MIN_EXCHANGE_EUR = 100;
 
 export const DEFAULT_RATES: Rates = {
   EUR_USDT: DEFAULT_EUR_UAH / DEFAULT_UAH_PER_USDT,
@@ -43,6 +44,18 @@ export function convertCurrencyToEur(amount: number, currency: Currency, rates: 
   return rates.EUR_USDT === 0 ? 0 : amount / rates.EUR_USDT;
 }
 
+export function getGiveAmountInEur(amount: number, giveAsset: ExchangeAsset, rates: Rates): number {
+  return convertCurrencyToEur(amount, getAssetCurrency(giveAsset), rates);
+}
+
+export function isBelowMinExchange(amount: number, giveAsset: ExchangeAsset, rates: Rates): boolean {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return true;
+  }
+
+  return getGiveAmountInEur(amount, giveAsset, rates) + 1e-9 < MIN_EXCHANGE_EUR;
+}
+
 export function getConversionRate(fromCurrency: Currency, toCurrency: Currency, rates: Rates): number {
   if (fromCurrency === toCurrency) {
     return 1;
@@ -81,6 +94,60 @@ export function getAssetConversionRate(fromAsset: ExchangeAsset, toAsset: Exchan
 
 export function convertBetweenAssets(amount: number, fromAsset: ExchangeAsset, toAsset: ExchangeAsset, rates: Rates): number {
   return amount * getAssetConversionRate(fromAsset, toAsset, rates);
+}
+
+export function formatDisplayRate(rate: number): string {
+  if (!Number.isFinite(rate) || rate <= 0) {
+    return '0';
+  }
+
+  if (rate >= 100) {
+    return rate.toFixed(2);
+  }
+
+  if (rate >= 1) {
+    return rate.toFixed(4);
+  }
+
+  if (rate >= 0.01) {
+    return rate.toFixed(4);
+  }
+
+  return rate.toFixed(6);
+}
+
+/**
+ * Для мелких курсов (UAH -> USDT ~0.02) показываем инвертированный вид:
+ * "1 USDT = 44.82 UAH", чтобы курс выглядел привычно.
+ */
+export function getReadableRatePresentation(
+  fromAsset: ExchangeAsset,
+  toAsset: ExchangeAsset,
+  rates: Rates,
+  commissionPercent: number,
+): { leftLabelCurrency: string; rightValue: string; rightCurrency: string; inverted: boolean } {
+  const fromCurrency = getAssetCurrency(fromAsset);
+  const toCurrency = getAssetCurrency(toAsset);
+  const baseRate = getAssetConversionRate(fromAsset, toAsset, rates);
+  const multiplier = Math.max(0, 1 - commissionPercent / 100);
+  const clientRate = baseRate * multiplier;
+
+  const shouldInvert = clientRate > 0 && clientRate < 0.1;
+  if (shouldInvert) {
+    return {
+      leftLabelCurrency: toCurrency,
+      rightValue: formatDisplayRate(1 / clientRate),
+      rightCurrency: fromCurrency,
+      inverted: true,
+    };
+  }
+
+  return {
+    leftLabelCurrency: fromCurrency,
+    rightValue: formatDisplayRate(clientRate),
+    rightCurrency: toCurrency,
+    inverted: false,
+  };
 }
 
 export function roundAmountForAsset(asset: ExchangeAsset, amount: number): number {

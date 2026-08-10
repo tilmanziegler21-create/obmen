@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import WebApp from '@twa-dev/sdk';
 import { ExchangeState, City, ExchangeOrder, type ExchangeAsset, type SaveResult } from '../types';
-import { generateReferralCode, getCommissionMultiplier } from '../lib/customer';
+import { generateReferralCode, getBaseCommissionPercent, getCommissionMultiplier } from '../lib/customer';
 import { DEFAULT_RATES, convertBetweenAssets, getAssetConversionRate, roundAmountForAsset } from '../lib/rates';
 import { getAllowedTargetAssets, getDefaultTargetAsset, getDirectionFromGiveAsset, inferOrderAssets } from '../lib/exchangeAssets';
 
@@ -62,8 +62,8 @@ export const useStore = create<ExchangeState>()(
     (set, get) => ({
       cities: INITIAL_CITIES,
       rates: DEFAULT_RATES,
-      rateMode: 'manual',
-      rateSpread: 0.5,
+      rateMode: 'auto',
+      rateSpread: 4,
       rateUpdatedAt: new Date().toISOString(),
       orders: [],
       usdtReserve: 2500,
@@ -305,6 +305,7 @@ export const useStore = create<ExchangeState>()(
           direction: dir,
           selectedGiveAsset: nextGiveAsset,
           selectedGetAsset: getDefaultTargetAsset(nextGiveAsset),
+          commissionPercent: getBaseCommissionPercent(nextGiveAsset),
           giveAmount: '',
           getAmount: '',
         });
@@ -316,6 +317,7 @@ export const useStore = create<ExchangeState>()(
             ? state.selectedGetAsset
             : getDefaultTargetAsset(asset),
           direction: getDirectionFromGiveAsset(asset),
+          commissionPercent: getBaseCommissionPercent(asset),
         }));
         const { giveAmount, getAmount } = get();
         if (giveAmount) {
@@ -451,7 +453,10 @@ export const useStore = create<ExchangeState>()(
         }
         
         const amount = Number(giveAmount);
-        const multiplier = getCommissionMultiplier(commissionPercent);
+        // Продажа USDT всегда 1%, остальное — текущая комиссия (база 4% со скидками)
+        const appliedCommission =
+          selectedGiveAsset === 'USDT' ? getBaseCommissionPercent('USDT') : commissionPercent;
+        const multiplier = getCommissionMultiplier(appliedCommission);
         const result = roundAmountForAsset(
           selectedGetAsset,
           convertBetweenAssets(amount, selectedGiveAsset, selectedGetAsset, rates) * multiplier,
@@ -467,7 +472,9 @@ export const useStore = create<ExchangeState>()(
         }
         
         const amount = Number(getAmount);
-        const multiplier = getCommissionMultiplier(commissionPercent);
+        const appliedCommission =
+          selectedGiveAsset === 'USDT' ? getBaseCommissionPercent('USDT') : commissionPercent;
+        const multiplier = getCommissionMultiplier(appliedCommission);
         const baseRate = getAssetConversionRate(selectedGiveAsset, selectedGetAsset, rates);
         const result = baseRate === 0 ? 0 : amount / (baseRate * multiplier);
         set({
@@ -510,7 +517,7 @@ export const useStore = create<ExchangeState>()(
     }),
     {
       name: 'cryptobull-storage',
-      version: 11,
+      version: 12,
       // Persist core admin and order data, reset user inputs on reload
       partialize: (state) => ({
         cities: state.cities,
@@ -558,8 +565,9 @@ export const useStore = create<ExchangeState>()(
             ...DEFAULT_RATES,
             ...(state.rates ?? {}),
           },
-          rateMode: state.rateMode ?? 'manual',
-          rateSpread: state.rateSpread ?? 0.5,
+          rateMode: state.rateMode === 'manual' ? 'manual' : 'auto',
+          // Старый дефолт 0.5 ломал комиссию (подставлялся вместо 4%)
+          rateSpread: state.rateSpread === 0.5 || state.rateSpread == null ? 4 : state.rateSpread,
           rateUpdatedAt: state.rateUpdatedAt ?? new Date().toISOString(),
           antiPhishingCode: state.antiPhishingCode ?? DEFAULT_ANTI_PHISHING_CODE,
           supportLink: state.supportLink ?? 'cryptobull_manager',
@@ -567,7 +575,7 @@ export const useStore = create<ExchangeState>()(
             ...DEFAULT_PROFILE_SETTINGS,
             ...(state.profileSettings ?? {}),
           },
-          commissionPercent: 4,
+          commissionPercent: state.rateSpread === 0.5 || state.rateSpread == null ? 4 : Math.max(0, Math.min(4, Number(state.rateSpread) || 4)),
           cities: state.cities.map((city) => {
             const legacyCity = city as City & { name?: string };
 

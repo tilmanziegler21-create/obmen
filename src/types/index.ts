@@ -111,7 +111,7 @@ export interface ExchangeState {
   removeCity: (id: string) => Promise<SaveResult>;
   updateCityLimit: (id: string, limit: number) => Promise<void>;
   updateUsdtReserve: (amount: number) => Promise<void>;
-  updateRateConfig: (config: { rateMode?: 'manual' | 'auto'; rateSpread?: number; rate?: number }) => Promise<void>;
+  updateRateConfig: (config: { rateMode?: 'manual' | 'auto'; rateSpread?: number; rate?: number; usdtUah?: number }) => Promise<void>;
   updateAntiPhishingCode: (code: string) => Promise<void>;
   updateSupportLink: (link: string) => Promise<void>;
   updateProfileSettings: (settings: Partial<ProfileSettings>) => void;

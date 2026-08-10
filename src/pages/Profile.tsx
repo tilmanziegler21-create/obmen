@@ -5,7 +5,7 @@ import WebApp from '@twa-dev/sdk';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useStore } from '../store';
 import { useI18n } from '../i18n';
-import { calculateCustomerMetrics, getCustomerBenefits } from '../lib/customer';
+import { calculateCustomerMetrics, getBenefitsForGiveAsset, COMMISSION_DEFAULT_PERCENT, COMMISSION_SELL_USDT_PERCENT } from '../lib/customer';
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -24,7 +24,7 @@ export default function Profile() {
     [currentUserHandle, currentUserId, orders],
   );
   const benefits = useMemo(
-    () => getCustomerBenefits(metrics, profileSettings.activatedReferralCode),
+    () => getBenefitsForGiveAsset(metrics, profileSettings.activatedReferralCode, 'EUR_CASH'),
     [metrics, profileSettings.activatedReferralCode],
   );
   const currentUserStats = useMemo(
@@ -90,7 +90,7 @@ export default function Profile() {
     { label: t('profile.securityCodeLabel'), value: antiPhishingCode || '-' },
     { label: t('profile.referralCodeTitle'), value: profileSettings.referralCode || '-' },
     { label: t('profile.discountLabel'), value: `${benefits.totalDiscountPercent.toFixed(1)}%` },
-    { label: t('profile.commissionLabel'), value: `${benefits.effectiveCommissionPercent.toFixed(1)}%` },
+    { label: t('profile.commissionLabel'), value: `${COMMISSION_DEFAULT_PERCENT}% / USDT ${COMMISSION_SELL_USDT_PERCENT}%` },
   ];
 
   const adminRows = isAdmin

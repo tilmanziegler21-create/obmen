@@ -5,9 +5,9 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { useI18n } from '../i18n';
 import LanguageSwitcher from '../components/LanguageSwitcher';
-import { calculateCustomerMetrics, getCustomerBenefits, isOrderOwnedByUser } from '../lib/customer';
+import { calculateCustomerMetrics, getBenefitsForGiveAsset, isOrderOwnedByUser } from '../lib/customer';
 import { getAllowedTargetAssets, getAssetCurrency, getAssetLabel } from '../lib/exchangeAssets';
-import { getAssetConversionRate } from '../lib/rates';
+import { getReadableRatePresentation, isBelowMinExchange, MIN_EXCHANGE_EUR } from '../lib/rates';
 
 const MOCK_REVIEWS = [
   { id: 1, name: 'Alex M.', text: 'Быстрый обмен в Берлине, курьер приехал вовремя. Рекомендую!', rating: 5, date: '19.06.2026' },
@@ -145,8 +145,8 @@ export default function Home() {
     [currentUserHandle, currentUserId, orders],
   );
   const benefits = useMemo(
-    () => getCustomerBenefits(metrics, profileSettings.activatedReferralCode, useStore.getState().rateSpread),
-    [metrics, profileSettings.activatedReferralCode],
+    () => getBenefitsForGiveAsset(metrics, profileSettings.activatedReferralCode, selectedGiveAsset),
+    [metrics, profileSettings.activatedReferralCode, selectedGiveAsset],
   );
 
   useEffect(() => {
@@ -178,15 +178,22 @@ export default function Home() {
   const currentCity = cities.find((city) => city.id === selectedCityId) ?? null;
   const isCityMissing = !currentCity;
   const isCityInactive = currentCity ? !currentCity.isActive : false;
+  const giveAmountNumber = Number(giveAmount);
+  const isAmountTooSmall =
+    Number.isFinite(giveAmountNumber) &&
+    giveAmountNumber > 0 &&
+    isBelowMinExchange(giveAmountNumber, selectedGiveAsset, rates);
   const isReserveBlocked = isCityMissing || isCityInactive;
-  const isValid = Number(giveAmount) > 0 && !isReserveBlocked;
+  const isValid = giveAmountNumber > 0 && !isReserveBlocked && !isAmountTooSmall;
   
   const reserveMessage =
     isCityMissing
       ? t('home.cityRequired')
       : isCityInactive
         ? t('home.cityInactive')
-        : null;
+        : isAmountTooSmall
+          ? t('home.minAmountError', { amount: MIN_EXCHANGE_EUR })
+          : null;
 
   const handleOpenProfile = () => {
     WebApp.HapticFeedback.impactOccurred('light');
@@ -215,9 +222,8 @@ export default function Home() {
   const handleSelectAsset = (field: 'give' | 'get', asset: 'EUR_CASH' | 'UAH_CARD' | 'USDT') => {
     WebApp.HapticFeedback.selectionChanged();
     if (field === 'give') {
-      const nextGiveAmount = getAmount || '';
+      // Сохраняем введённую сумму и просто пересчитываем getAmount под новый актив
       setGiveAsset(asset);
-      setGiveAmount(nextGiveAmount);
     } else {
       setGetAsset(asset);
     }
@@ -238,7 +244,12 @@ export default function Home() {
     }
   };
 
-  const currentRate = getAssetConversionRate(selectedGiveAsset, selectedGetAsset, rates);
+  const ratePresentation = getReadableRatePresentation(
+    selectedGiveAsset,
+    selectedGetAsset,
+    rates,
+    benefits.effectiveCommissionPercent,
+  );
   const giveAssetOptions = ['EUR_CASH', 'UAH_CARD', 'USDT'] as const;
   const getAssetOptions = getAllowedTargetAssets(selectedGiveAsset);
 
@@ -505,7 +516,7 @@ export default function Home() {
                 </div>
                 <div className="flex items-center gap-[6px]">
                   <span className="text-[13px] font-[600] text-[#FFFFFF]">
-                    1 {getAssetLabel(selectedGiveAsset, language)} = {currentRate.toFixed(4)} {getAssetCurrency(selectedGetAsset)}
+                    1 {ratePresentation.leftLabelCurrency} = {ratePresentation.rightValue} {ratePresentation.rightCurrency}
                   </span>
                 </div>
               </div>
@@ -672,7 +683,7 @@ export default function Home() {
               disabled={!isValid}
               className={`mt-[16px] w-full rounded-[16px] px-[24px] py-[18px] text-[15px] font-[700] uppercase tracking-[0.08em] transition-opacity ${isValid ? 'bg-[#00CC66] text-[#000000] hover:opacity-90 shadow-[0_4px_14px_rgba(0,204,102,0.25)]' : 'bg-[#1A1A1A] text-[#808080]'}`}
             >
-              {selectedGiveAsset === 'EUR_CASH' ? t('home.ctaCash') : t('home.ctaUsdt')}
+              {selectedGetAsset === 'USDT' ? t('home.ctaCash') : t('home.ctaUsdt')}
             </button>
           </div>
         </div>

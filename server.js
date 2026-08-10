@@ -18,6 +18,9 @@ const botToken = (process.env.VITE_BOT_TOKEN || process.env.BOT_TOKEN || '').tri
 const fallbackChatId = (process.env.VITE_CHAT_ID || process.env.CHAT_ID || '').trim();
 const publicBaseUrl = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
 const requireTelegramInit = process.env.REQUIRE_TELEGRAM_INIT === 'true';
+const startVideoFileIdEnv = (process.env.START_VIDEO_FILE_ID || '').trim();
+const startVideoUrlEnv = (process.env.START_VIDEO_URL || '').trim();
+const startVideoPath = path.join(__dirname, 'public', 'start.mp4');
 const adminIds = new Set(
   (process.env.ADMIN_IDS || process.env.VITE_ADMIN_IDS || '')
     .split(',')
@@ -158,13 +161,14 @@ function createDefaultState() {
       UAH_USDT: 1 / 44.82,
       EUR_UAH: 52.01,
     },
-    rateMode: 'manual',
-    rateSpread: 0.5,
+    rateMode: 'auto',
+    rateSpread: 4,
     rateUpdatedAt: new Date().toISOString(),
     orders: [],
     usdtReserve: 2500,
     antiPhishingCode: 'BULL',
     supportLink: 'cryptobull_manager',
+    startVideoFileId: '',
   };
 }
 
@@ -187,7 +191,11 @@ function normalizeState(rawState) {
       EUR_UAH: Number(raw.rates?.EUR_UAH) || defaults.rates.EUR_UAH,
     },
     rateMode: ['manual', 'auto'].includes(raw.rateMode) ? raw.rateMode : defaults.rateMode,
-    rateSpread: typeof raw.rateSpread === 'number' && !isNaN(raw.rateSpread) ? Number(raw.rateSpread) : defaults.rateSpread,
+    rateSpread: (() => {
+      const spread = typeof raw.rateSpread === 'number' && !isNaN(raw.rateSpread) ? Number(raw.rateSpread) : defaults.rateSpread;
+      // Старый дефолт 0.5 ломал клиентскую комиссию
+      return spread === 0.5 ? 4 : spread;
+    })(),
     rateUpdatedAt: ensureString(raw.rateUpdatedAt) || defaults.rateUpdatedAt,
     orders: Array.isArray(raw.orders)
       ? raw.orders.map((order) => ({
@@ -210,6 +218,7 @@ function normalizeState(rawState) {
     usdtReserve: Number(raw.usdtReserve) || defaults.usdtReserve,
     antiPhishingCode: ensureString(raw.antiPhishingCode) || defaults.antiPhishingCode,
     supportLink: ensureString(raw.supportLink) || defaults.supportLink,
+    startVideoFileId: ensureString(raw.startVideoFileId) || defaults.startVideoFileId,
   };
 }
 
@@ -543,6 +552,204 @@ async function sendTelegramMessage(chatId, message, replyMarkup) {
   });
 }
 
+function isStartCommand(text) {
+  if (!text) {
+    return false;
+  }
+
+  // /start, /start@BotName, /start payload, /start@BotName payload
+  return /^\/start(?:@[A-Za-z0-9_]+)?(?:\s|$)/i.test(text.trim());
+}
+
+function getStartReplyMarkup() {
+  if (!publicBaseUrl) {
+    console.warn('[Telegram] PUBLIC_BASE_URL is missing — /start button ОБМЕН will be hidden');
+    return undefined;
+  }
+
+  // Inline web_app + reply keyboard на случай, если inline не отрисуется
+  return {
+    inline_keyboard: [
+      [
+        {
+          text: 'ОБМЕН',
+          web_app: { url: publicBaseUrl },
+        },
+      ],
+    ],
+  };
+}
+
+function getStartCaption() {
+  return [
+    '👋 <b>Добро пожаловать в CryptoBull!</b>',
+    '',
+    'Нажмите кнопку <b>ОБМЕН</b> ниже, чтобы открыть приложение и создать заявку.',
+  ].join('\n');
+}
+
+function getStartPlainText() {
+  return [
+    '👋 Добро пожаловать в CryptoBull!',
+    '',
+    'Нажмите кнопку ОБМЕН ниже, чтобы открыть приложение и создать заявку.',
+    publicBaseUrl ? `\nПриложение: ${publicBaseUrl}` : '',
+  ].filter(Boolean).join('\n');
+}
+
+async function callTelegramMultipart(method, formData) {
+  const url = `https://api.telegram.org/bot${botToken}/${method}`;
+  console.log(`[Telegram API] Calling multipart ${method}`);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, 60000);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeout);
+
+    const data = await response.json().catch(() => ({}));
+    console.log(`[Telegram API] Response from ${method}:`, JSON.stringify(data));
+
+    if (!response.ok || data.ok === false) {
+      const errorMessage = typeof data.description === 'string' ? data.description : 'Telegram API error';
+      throw new Error(errorMessage);
+    }
+
+    return data.result;
+  } catch (error) {
+    clearTimeout(timeout);
+    if (error.name === 'AbortError') {
+      throw new Error('Telegram API timeout (60s)');
+    }
+    throw error;
+  }
+}
+
+function resolveStartVideoSource(state) {
+  const cachedFileId = ensureString(state?.startVideoFileId) || startVideoFileIdEnv;
+  if (cachedFileId) {
+    return { type: 'file_id', value: cachedFileId };
+  }
+
+  if (startVideoUrlEnv) {
+    return { type: 'url', value: startVideoUrlEnv };
+  }
+
+  if (publicBaseUrl && fs.existsSync(startVideoPath)) {
+    return { type: 'url', value: `${publicBaseUrl}/start.mp4` };
+  }
+
+  if (fs.existsSync(startVideoPath)) {
+    return { type: 'file', value: startVideoPath };
+  }
+
+  return null;
+}
+
+async function sendStartWelcome(chatId) {
+  const replyMarkup = getStartReplyMarkup();
+  const caption = getStartCaption();
+  const state = readState();
+  const videoSource = resolveStartVideoSource(state);
+
+  console.log('[Telegram] /start welcome', {
+    chatId,
+    hasPublicBaseUrl: Boolean(publicBaseUrl),
+    hasReplyMarkup: Boolean(replyMarkup),
+    videoSourceType: videoSource?.type || null,
+  });
+
+  if (!videoSource) {
+    console.warn('[Telegram] start.mp4 not found — sending text welcome only');
+    try {
+      return await sendTelegramMessage(chatId, caption, replyMarkup);
+    } catch (htmlError) {
+      console.warn('[Telegram] HTML /start failed, retry plain text:', htmlError.message);
+      return callTelegram('sendMessage', {
+        chat_id: chatId,
+        text: getStartPlainText(),
+        reply_markup: replyMarkup,
+      });
+    }
+  }
+
+  if (videoSource.type === 'file') {
+    const formData = new FormData();
+    const fileBuffer = fs.readFileSync(videoSource.value);
+    formData.append('chat_id', String(chatId));
+    formData.append('caption', caption);
+    formData.append('parse_mode', 'HTML');
+    formData.append('supports_streaming', 'true');
+    if (replyMarkup) {
+      formData.append('reply_markup', JSON.stringify(replyMarkup));
+    }
+    formData.append('video', new Blob([fileBuffer], { type: 'video/mp4' }), 'start.mp4');
+
+    const result = await callTelegramMultipart('sendVideo', formData);
+    const fileId = result?.video?.file_id;
+    if (fileId && state.startVideoFileId !== fileId) {
+      state.startVideoFileId = fileId;
+      writeState(state);
+      console.log('[Telegram] Cached start video file_id');
+    }
+    return result;
+  }
+
+  const result = await callTelegram('sendVideo', {
+    chat_id: chatId,
+    video: videoSource.value,
+    caption,
+    parse_mode: 'HTML',
+    supports_streaming: true,
+    reply_markup: replyMarkup,
+  });
+
+  const fileId = result?.video?.file_id;
+  if (fileId && state.startVideoFileId !== fileId) {
+    state.startVideoFileId = fileId;
+    writeState(state);
+    console.log('[Telegram] Cached start video file_id');
+  }
+
+  return result;
+}
+
+async function handleStartCommand(message) {
+  const chatId = message?.chat?.id;
+  if (!chatId) {
+    console.warn('[Telegram] /start without chat.id', message);
+    return;
+  }
+
+  if (!botToken) {
+    console.error('[Telegram] BOT_TOKEN missing — cannot answer /start');
+    return;
+  }
+
+  try {
+    await sendStartWelcome(chatId);
+  } catch (error) {
+    console.error('[Telegram] Failed to send /start welcome:', error.message);
+    try {
+      await callTelegram('sendMessage', {
+        chat_id: chatId,
+        text: getStartPlainText(),
+        reply_markup: getStartReplyMarkup(),
+      });
+    } catch (fallbackError) {
+      console.error('[Telegram] Failed to send /start text fallback:', fallbackError.message);
+    }
+  }
+}
+
 async function editTelegramMessage(order, isVerified) {
   if (!order.telegramChatId || !order.telegramMessageId) {
     return;
@@ -626,17 +833,31 @@ function applyOrderStatusChange(state, orderId, status, managerName) {
 
 async function ensureTelegramWebhook() {
   if (!botToken || !publicBaseUrl) {
-    return;
+    console.warn('[Telegram] skip setWebhook: missing BOT_TOKEN or PUBLIC_BASE_URL');
+    return null;
   }
 
   try {
-    await callTelegram('setWebhook', {
+    // Явно указываем message — иначе Telegram может сохранить старый фильтр только callback_query
+    const result = await callTelegram('setWebhook', {
       url: `${publicBaseUrl}/api/telegram/webhook`,
-      allowed_updates: ['callback_query'],
+      allowed_updates: ['message', 'edited_message', 'callback_query'],
+      drop_pending_updates: false,
     });
+    console.log('[Telegram] Webhook set:', `${publicBaseUrl}/api/telegram/webhook`);
+    return result;
   } catch (error) {
     console.error('Failed to set Telegram webhook', error);
+    throw error;
   }
+}
+
+async function getTelegramWebhookInfo() {
+  if (!botToken) {
+    return null;
+  }
+
+  return callTelegram('getWebhookInfo', {});
 }
 
 function getManagerNameFromTelegramUser(user) {
@@ -651,8 +872,15 @@ function getManagerNameFromTelegramUser(user) {
   return [user.first_name, user.last_name].filter(Boolean).join(' ').trim() || null;
 }
 
-app.get('/api/health', (_req, res) => {
+app.get('/api/health', async (_req, res) => {
   const state = readState();
+  let webhookInfo = null;
+
+  try {
+    webhookInfo = botToken ? await getTelegramWebhookInfo() : null;
+  } catch (error) {
+    webhookInfo = { error: error instanceof Error ? error.message : 'Failed to getWebhookInfo' };
+  }
 
   res.json({
     ok: true,
@@ -660,7 +888,9 @@ app.get('/api/health', (_req, res) => {
     hasBotToken: Boolean(botToken),
     hasChatId: Boolean(fallbackChatId),
     hasPublicBaseUrl: Boolean(publicBaseUrl),
+    hasStartVideo: fs.existsSync(startVideoPath),
     orders: state.orders.length,
+    webhook: webhookInfo,
     timestamp: Date.now()
   });
 });
@@ -675,35 +905,103 @@ if (publicBaseUrl) {
   }, 14 * 60 * 1000);
 }
 
-// Автообновление курса Binance (каждую минуту)
+// Автообновление курсов (каждую минуту). Binance + fallback на Coinbase / open.er-api
+async function fetchJsonSafe(url) {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    return await response.json().catch(() => null);
+  } catch {
+    return null;
+  }
+}
+
+async function fetchEurUsdtRate() {
+  const binance = await fetchJsonSafe('https://api.binance.com/api/v3/ticker/price?symbol=EURUSDT');
+  const binancePrice = Number(binance?.price);
+  if (Number.isFinite(binancePrice) && binancePrice > 0) {
+    return { source: 'binance', eurUsdt: binancePrice };
+  }
+
+  const coinbase = await fetchJsonSafe('https://api.coinbase.com/v2/exchange-rates?currency=USDT');
+  const eurPerUsdt = Number(coinbase?.data?.rates?.EUR);
+  if (Number.isFinite(eurPerUsdt) && eurPerUsdt > 0) {
+    return { source: 'coinbase', eurUsdt: 1 / eurPerUsdt };
+  }
+
+  const openEr = await fetchJsonSafe('https://open.er-api.com/v6/latest/USD');
+  const eurPerUsd = Number(openEr?.rates?.EUR);
+  if (Number.isFinite(eurPerUsd) && eurPerUsd > 0) {
+    return { source: 'open.er-api', eurUsdt: 1 / eurPerUsd };
+  }
+
+  return null;
+}
+
+async function fetchUsdtUahRate() {
+  // Сначала FX-источники: Binance USDTUAH часто даёт «кривой» курс (премия к рынку)
+  const coinbase = await fetchJsonSafe('https://api.coinbase.com/v2/exchange-rates?currency=USDT');
+  const uahPerUsdt = Number(coinbase?.data?.rates?.UAH);
+  if (Number.isFinite(uahPerUsdt) && uahPerUsdt > 0) {
+    return { source: 'coinbase', usdtUah: uahPerUsdt };
+  }
+
+  const openEr = await fetchJsonSafe('https://open.er-api.com/v6/latest/USD');
+  const uahPerUsd = Number(openEr?.rates?.UAH);
+  if (Number.isFinite(uahPerUsd) && uahPerUsd > 0) {
+    return { source: 'open.er-api', usdtUah: uahPerUsd };
+  }
+
+  const binance = await fetchJsonSafe('https://api.binance.com/api/v3/ticker/price?symbol=USDTUAH');
+  const binancePrice = Number(binance?.price);
+  if (Number.isFinite(binancePrice) && binancePrice > 0) {
+    return { source: 'binance', usdtUah: binancePrice };
+  }
+
+  return null;
+}
+
 async function fetchBinanceRate() {
   try {
     const state = readState();
-    if (state.rateMode !== 'auto') return;
-    
-    const [resEur, resUah] = await Promise.all([
-      fetch('https://api.binance.com/api/v3/ticker/price?symbol=EURUSDT').catch(() => null),
-      fetch('https://api.binance.com/api/v3/ticker/price?symbol=USDTUAH').catch(() => null)
-    ]);
-    
-    const dataEur = resEur ? await resEur.json().catch(() => null) : null;
-    const dataUah = resUah ? await resUah.json().catch(() => null) : null;
 
-    if (dataEur?.price && dataUah?.price) {
-      const binanceEurUsdt = parseFloat(dataEur.price);
-      const binanceUsdtUah = parseFloat(dataUah.price);
-      // При сохранении чистых курсов Binance, мы больше не применяем наценку здесь!
-      // Наценка применяется динамически на фронтенде в виде commissionPercent (спреда).
-      state.rates.EUR_USDT = Number(binanceEurUsdt.toFixed(4));
-      state.rates.UAH_USDT = Number((1 / binanceUsdtUah).toFixed(8));
-      state.rates.EUR_UAH = Number((binanceEurUsdt * binanceUsdtUah).toFixed(2));
-      
-      state.rateUpdatedAt = new Date().toISOString();
-      writeState(state);
-      console.log(`[Binance] Rates updated. EUR/USDT: ${state.rates.EUR_USDT}, USDT/UAH: ${binanceUsdtUah.toFixed(2)}, EUR/UAH: ${state.rates.EUR_UAH}`);
+    const [eurResult, uahResult] = await Promise.all([
+      fetchEurUsdtRate(),
+      fetchUsdtUahRate(),
+    ]);
+
+    let changed = false;
+
+    // EUR обновляем из рынка только в auto; в manual оставляем ручной EUR
+    if (state.rateMode === 'auto' && eurResult) {
+      state.rates.EUR_USDT = Number(eurResult.eurUsdt.toFixed(4));
+      changed = true;
     }
+
+    // UAH всегда тянем с рынка — иначе гривна зависает на дефолте
+    if (uahResult) {
+      state.rates.UAH_USDT = Number((1 / uahResult.usdtUah).toFixed(8));
+      changed = true;
+    }
+
+    if (state.rates.EUR_USDT > 0 && state.rates.UAH_USDT > 0) {
+      state.rates.EUR_UAH = Number((state.rates.EUR_USDT / state.rates.UAH_USDT).toFixed(2));
+      changed = true;
+    }
+
+    if (!changed) {
+      console.warn('[Rates] No EUR/UAH quotes available from Binance or fallbacks');
+      return;
+    }
+
+    state.rateUpdatedAt = new Date().toISOString();
+    writeState(state);
+    console.log(
+      `[Rates] Updated via EUR=${state.rateMode === 'auto' ? (eurResult?.source || 'keep') : 'manual'}, UAH=${uahResult?.source || 'keep'}. ` +
+      `EUR/USDT: ${state.rates.EUR_USDT}, UAH/USDT: ${(1 / state.rates.UAH_USDT).toFixed(2)}, EUR/UAH: ${state.rates.EUR_UAH}`,
+    );
   } catch (e) {
-    console.error('[Binance] Failed to fetch rate:', e.message);
+    console.error('[Rates] Failed to fetch rate:', e.message);
   }
 }
 
@@ -712,7 +1010,18 @@ setInterval(fetchBinanceRate, 60 * 1000);
 // И один раз при старте
 fetchBinanceRate();
 
-app.get('/api/bootstrap', (_req, res) => {
+app.get('/api/bootstrap', async (_req, res) => {
+  try {
+    const state = readState();
+    const updatedAtMs = Date.parse(state.rateUpdatedAt);
+    const isStale = !Number.isFinite(updatedAtMs) || Date.now() - updatedAtMs > 60_000;
+    if (isStale) {
+      await fetchBinanceRate();
+    }
+  } catch (error) {
+    console.error('[Rates] bootstrap refresh failed', error);
+  }
+
   res.json(getPublicState(readState()));
 });
 
@@ -809,21 +1118,32 @@ app.delete('/api/admin/cities/:id', requireAdmin, (req, res) => {
 
 app.patch('/api/admin/settings', requireAdmin, async (req, res) => {
   const state = readState();
-  let shouldFetchBinance = false;
 
   if (req.body?.rate !== undefined) {
     state.rates.EUR_USDT = Number(req.body.rate) || state.rates.EUR_USDT;
     state.rateUpdatedAt = new Date().toISOString();
   }
 
+  // usdtUah = сколько гривен за 1 USDT (опциональный ручной ввод)
+  if (req.body?.usdtUah !== undefined) {
+    const usdtUah = Number(req.body.usdtUah);
+    if (Number.isFinite(usdtUah) && usdtUah > 0) {
+      state.rates.UAH_USDT = Number((1 / usdtUah).toFixed(8));
+      state.rateUpdatedAt = new Date().toISOString();
+    }
+  }
+
   if (req.body?.rateMode !== undefined) {
     state.rateMode = ['manual', 'auto'].includes(req.body.rateMode) ? req.body.rateMode : state.rateMode;
-    if (state.rateMode === 'auto') shouldFetchBinance = true;
   }
 
   if (req.body?.rateSpread !== undefined) {
-    state.rateSpread = Number(req.body.rateSpread) || 0;
-    if (state.rateMode === 'auto') shouldFetchBinance = true;
+    const nextSpread = Number(req.body.rateSpread);
+    state.rateSpread = Number.isFinite(nextSpread) ? Math.max(0, Math.min(20, nextSpread)) : state.rateSpread;
+  }
+
+  if (state.rates.EUR_USDT > 0 && state.rates.UAH_USDT > 0) {
+    state.rates.EUR_UAH = Number((state.rates.EUR_USDT / state.rates.UAH_USDT).toFixed(2));
   }
 
   if (req.body?.usdtReserve !== undefined) {
@@ -840,12 +1160,9 @@ app.patch('/api/admin/settings', requireAdmin, async (req, res) => {
 
   writeState(state);
 
-  if (shouldFetchBinance) {
-    await fetchBinanceRate();
-    res.json({ ok: true, state: getPublicState(readState()) });
-  } else {
-    res.json({ ok: true, state: getPublicState(state) });
-  }
+  // auto: EUR+UAH с рынка; manual: EUR не затираем, UAH обновляем
+  await fetchBinanceRate();
+  res.json({ ok: true, state: getPublicState(readState()) });
 });
 
 app.patch('/api/admin/orders/:id', requireAdmin, async (req, res) => {
@@ -919,6 +1236,24 @@ app.post('/api/orders', async (req, res) => {
     }
 
     const state = readState();
+
+    const MIN_EXCHANGE_EUR = 100;
+    const giveAmountNumber = Number(orderDraft.giveAmount);
+    const giveCurrency = orderDraft.giveCurrency || 'EUR';
+    let giveAmountInEur = giveAmountNumber;
+    if (giveCurrency === 'UAH') {
+      giveAmountInEur = state.rates.EUR_UAH > 0 ? giveAmountNumber / state.rates.EUR_UAH : 0;
+    } else if (giveCurrency === 'USDT') {
+      giveAmountInEur = state.rates.EUR_USDT > 0 ? giveAmountNumber / state.rates.EUR_USDT : 0;
+    }
+
+    if (!Number.isFinite(giveAmountInEur) || giveAmountInEur + 1e-9 < MIN_EXCHANGE_EUR) {
+      res.status(400).json({
+        error: `Minimum exchange amount is ${MIN_EXCHANGE_EUR} EUR (or equivalent)`,
+        minExchangeEUR: MIN_EXCHANGE_EUR,
+      });
+      return;
+    }
     
     // Добавляем фоллбек для города: если не нашли, берем первый попавшийся активный
     let city = state.cities.find((item) => item.id === orderDraft.cityId || item.cityKey === orderDraft.cityKey);
@@ -1025,42 +1360,73 @@ app.post('/api/orders', async (req, res) => {
 });
 
 app.post('/api/telegram/webhook', async (req, res) => {
-  const callbackQuery = req.body?.callback_query;
-  const callbackData = ensureString(callbackQuery?.data);
-
-  if (!callbackQuery || !callbackData.startsWith('order:')) {
-    res.json({ ok: true });
-    return;
-  }
-
-  const [, orderId, status] = callbackData.split(':');
-  if (!orderId || !['processing', 'ready', 'rejected'].includes(status)) {
-    res.json({ ok: true });
-    return;
-  }
-
-  const state = readState();
-  const managerName = getManagerNameFromTelegramUser(callbackQuery.from);
-  const nextState = applyOrderStatusChange(
-    state,
-    orderId,
-    status,
-    status === 'processing' && managerName ? managerName : undefined,
-  );
-
-  writeState(nextState);
-
   try {
-    const updatedOrder = nextState.orders.find((order) => order.id === orderId);
-    if (updatedOrder) {
-      await editTelegramMessage(updatedOrder, true);
-    }
-    await answerCallbackQuery(callbackQuery.id, `Заявка ${orderId} -> ${formatStatus(status)}`);
-  } catch (error) {
-    console.error('Failed to process Telegram callback', error);
-  }
+    const updateType = req.body?.message
+      ? 'message'
+      : req.body?.edited_message
+        ? 'edited_message'
+        : req.body?.callback_query
+          ? 'callback_query'
+          : 'other';
+    console.log('[Telegram] webhook update:', updateType, {
+      text: req.body?.message?.text || req.body?.edited_message?.text || null,
+      callback: req.body?.callback_query?.data || null,
+    });
 
-  res.json({ ok: true });
+    const message = req.body?.message || req.body?.edited_message;
+    const messageText = ensureString(message?.text);
+
+    if (message && isStartCommand(messageText)) {
+      // Сначала отвечаем Telegram 200, потом шлём welcome (чтобы не было retry)
+      res.json({ ok: true });
+      handleStartCommand(message).catch((error) => {
+        console.error('Failed to process /start command', error);
+      });
+      return;
+    }
+
+    const callbackQuery = req.body?.callback_query;
+    const callbackData = ensureString(callbackQuery?.data);
+
+    if (!callbackQuery || !callbackData.startsWith('order:')) {
+      res.json({ ok: true });
+      return;
+    }
+
+    const [, orderId, status] = callbackData.split(':');
+    if (!orderId || !['processing', 'ready', 'rejected'].includes(status)) {
+      res.json({ ok: true });
+      return;
+    }
+
+    const state = readState();
+    const managerName = getManagerNameFromTelegramUser(callbackQuery.from);
+    const nextState = applyOrderStatusChange(
+      state,
+      orderId,
+      status,
+      status === 'processing' && managerName ? managerName : undefined,
+    );
+
+    writeState(nextState);
+
+    try {
+      const updatedOrder = nextState.orders.find((order) => order.id === orderId);
+      if (updatedOrder) {
+        await editTelegramMessage(updatedOrder, true);
+      }
+      await answerCallbackQuery(callbackQuery.id, `Заявка ${orderId} -> ${formatStatus(status)}`);
+    } catch (error) {
+      console.error('Failed to process Telegram callback', error);
+    }
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('[Telegram] webhook handler error', error);
+    if (!res.headersSent) {
+      res.json({ ok: true });
+    }
+  }
 });
 
 app.post('/api/telegram/set-webhook', async (_req, res) => {
@@ -1071,7 +1437,8 @@ app.post('/api/telegram/set-webhook', async (_req, res) => {
 
   try {
     await ensureTelegramWebhook();
-    res.json({ ok: true });
+    const info = await getTelegramWebhookInfo();
+    res.json({ ok: true, webhook: info });
   } catch (error) {
     res.status(500).json({
       error: error instanceof Error ? error.message : 'Failed to set webhook',
@@ -1079,9 +1446,30 @@ app.post('/api/telegram/set-webhook', async (_req, res) => {
   }
 });
 
+app.get('/api/telegram/webhook-info', async (_req, res) => {
+  if (!botToken) {
+    res.status(400).json({ error: 'BOT_TOKEN is missing' });
+    return;
+  }
+
+  try {
+    const info = await getTelegramWebhookInfo();
+    res.json({ ok: true, webhook: info });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Failed to get webhook info',
+    });
+  }
+});
+
 if (fs.existsSync(distDir)) {
   app.use(express.static(distDir));
+}
 
+// Раздаём public/ (в т.ч. start.mp4 для /start), даже без dist
+app.use(express.static(path.join(__dirname, 'public')));
+
+if (fs.existsSync(distDir)) {
   app.get(/^(?!\/api).*/, (_req, res) => {
     res.sendFile(path.join(distDir, 'index.html'));
   });

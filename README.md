@@ -68,6 +68,14 @@ curl -X POST https://your-render-domain.onrender.com/api/telegram/set-webhook
 ```
 
 - Либо сервер сам попытается установить webhook при старте, если заданы `BOT_TOKEN` и `PUBLIC_BASE_URL`
+- Команда `/start` в боте отправляет приветствие (видео если есть `public/start.mp4`) и кнопку **ОБМЕН** (открывает Mini App)
+- Видео берётся из `public/start.mp4` (или `START_VIDEO_URL` / `START_VIDEO_FILE_ID`)
+- После деплоя **обязательно** переустановите webhook (иначе Telegram может не присылать `message`):
+
+```bash
+curl -X POST https://your-render-domain.onrender.com/api/telegram/set-webhook
+curl https://your-render-domain.onrender.com/api/telegram/webhook-info
+```
 
 ## Проверка
 
