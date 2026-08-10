@@ -552,11 +552,22 @@ async function sendTelegramMessage(chatId, message, replyMarkup) {
   });
 }
 
+function isStartCommand(text) {
+  if (!text) {
+    return false;
+  }
+
+  // /start, /start@BotName, /start payload, /start@BotName payload
+  return /^\/start(?:@[A-Za-z0-9_]+)?(?:\s|$)/i.test(text.trim());
+}
+
 function getStartReplyMarkup() {
   if (!publicBaseUrl) {
+    console.warn('[Telegram] PUBLIC_BASE_URL is missing — /start button ОБМЕН will be hidden');
     return undefined;
   }
 
+  // Inline web_app + reply keyboard на случай, если inline не отрисуется
   return {
     inline_keyboard: [
       [
@@ -575,6 +586,15 @@ function getStartCaption() {
     '',
     'Нажмите кнопку <b>ОБМЕН</b> ниже, чтобы открыть приложение и создать заявку.',
   ].join('\n');
+}
+
+function getStartPlainText() {
+  return [
+    '👋 Добро пожаловать в CryptoBull!',
+    '',
+    'Нажмите кнопку ОБМЕН ниже, чтобы открыть приложение и создать заявку.',
+    publicBaseUrl ? `\nПриложение: ${publicBaseUrl}` : '',
+  ].filter(Boolean).join('\n');
 }
 
 async function callTelegramMultipart(method, formData) {
@@ -640,9 +660,25 @@ async function sendStartWelcome(chatId) {
   const state = readState();
   const videoSource = resolveStartVideoSource(state);
 
+  console.log('[Telegram] /start welcome', {
+    chatId,
+    hasPublicBaseUrl: Boolean(publicBaseUrl),
+    hasReplyMarkup: Boolean(replyMarkup),
+    videoSourceType: videoSource?.type || null,
+  });
+
   if (!videoSource) {
     console.warn('[Telegram] start.mp4 not found — sending text welcome only');
-    return sendTelegramMessage(chatId, caption, replyMarkup);
+    try {
+      return await sendTelegramMessage(chatId, caption, replyMarkup);
+    } catch (htmlError) {
+      console.warn('[Telegram] HTML /start failed, retry plain text:', htmlError.message);
+      return callTelegram('sendMessage', {
+        chat_id: chatId,
+        text: getStartPlainText(),
+        reply_markup: replyMarkup,
+      });
+    }
   }
 
   if (videoSource.type === 'file') {
@@ -689,6 +725,12 @@ async function sendStartWelcome(chatId) {
 async function handleStartCommand(message) {
   const chatId = message?.chat?.id;
   if (!chatId) {
+    console.warn('[Telegram] /start without chat.id', message);
+    return;
+  }
+
+  if (!botToken) {
+    console.error('[Telegram] BOT_TOKEN missing — cannot answer /start');
     return;
   }
 
@@ -697,7 +739,11 @@ async function handleStartCommand(message) {
   } catch (error) {
     console.error('[Telegram] Failed to send /start welcome:', error.message);
     try {
-      await sendTelegramMessage(chatId, getStartCaption(), getStartReplyMarkup());
+      await callTelegram('sendMessage', {
+        chat_id: chatId,
+        text: getStartPlainText(),
+        reply_markup: getStartReplyMarkup(),
+      });
     } catch (fallbackError) {
       console.error('[Telegram] Failed to send /start text fallback:', fallbackError.message);
     }
@@ -787,17 +833,31 @@ function applyOrderStatusChange(state, orderId, status, managerName) {
 
 async function ensureTelegramWebhook() {
   if (!botToken || !publicBaseUrl) {
-    return;
+    console.warn('[Telegram] skip setWebhook: missing BOT_TOKEN or PUBLIC_BASE_URL');
+    return null;
   }
 
   try {
-    await callTelegram('setWebhook', {
+    // Явно указываем message — иначе Telegram может сохранить старый фильтр только callback_query
+    const result = await callTelegram('setWebhook', {
       url: `${publicBaseUrl}/api/telegram/webhook`,
-      allowed_updates: ['callback_query', 'message'],
+      allowed_updates: ['message', 'edited_message', 'callback_query'],
+      drop_pending_updates: false,
     });
+    console.log('[Telegram] Webhook set:', `${publicBaseUrl}/api/telegram/webhook`);
+    return result;
   } catch (error) {
     console.error('Failed to set Telegram webhook', error);
+    throw error;
   }
+}
+
+async function getTelegramWebhookInfo() {
+  if (!botToken) {
+    return null;
+  }
+
+  return callTelegram('getWebhookInfo', {});
 }
 
 function getManagerNameFromTelegramUser(user) {
@@ -812,8 +872,15 @@ function getManagerNameFromTelegramUser(user) {
   return [user.first_name, user.last_name].filter(Boolean).join(' ').trim() || null;
 }
 
-app.get('/api/health', (_req, res) => {
+app.get('/api/health', async (_req, res) => {
   const state = readState();
+  let webhookInfo = null;
+
+  try {
+    webhookInfo = botToken ? await getTelegramWebhookInfo() : null;
+  } catch (error) {
+    webhookInfo = { error: error instanceof Error ? error.message : 'Failed to getWebhookInfo' };
+  }
 
   res.json({
     ok: true,
@@ -821,7 +888,9 @@ app.get('/api/health', (_req, res) => {
     hasBotToken: Boolean(botToken),
     hasChatId: Boolean(fallbackChatId),
     hasPublicBaseUrl: Boolean(publicBaseUrl),
+    hasStartVideo: fs.existsSync(startVideoPath),
     orders: state.orders.length,
+    webhook: webhookInfo,
     timestamp: Date.now()
   });
 });
@@ -1290,52 +1359,73 @@ app.post('/api/orders', async (req, res) => {
 });
 
 app.post('/api/telegram/webhook', async (req, res) => {
-  const message = req.body?.message;
-  const messageText = ensureString(message?.text);
-  if (messageText === '/start' || messageText.startsWith('/start ')) {
-    res.json({ ok: true });
-    handleStartCommand(message).catch((error) => {
-      console.error('Failed to process /start command', error);
-    });
-    return;
-  }
-
-  const callbackQuery = req.body?.callback_query;
-  const callbackData = ensureString(callbackQuery?.data);
-
-  if (!callbackQuery || !callbackData.startsWith('order:')) {
-    res.json({ ok: true });
-    return;
-  }
-
-  const [, orderId, status] = callbackData.split(':');
-  if (!orderId || !['processing', 'ready', 'rejected'].includes(status)) {
-    res.json({ ok: true });
-    return;
-  }
-
-  const state = readState();
-  const managerName = getManagerNameFromTelegramUser(callbackQuery.from);
-  const nextState = applyOrderStatusChange(
-    state,
-    orderId,
-    status,
-    status === 'processing' && managerName ? managerName : undefined,
-  );
-
-  writeState(nextState);
-
   try {
-    const updatedOrder = nextState.orders.find((order) => order.id === orderId);
-    if (updatedOrder) {
-      await editTelegramMessage(updatedOrder, true);
-    }
-    await answerCallbackQuery(callbackQuery.id, `Заявка ${orderId} -> ${formatStatus(status)}`);
-  } catch (error) {
-    console.error('Failed to process Telegram callback', error);
-  }
+    const updateType = req.body?.message
+      ? 'message'
+      : req.body?.edited_message
+        ? 'edited_message'
+        : req.body?.callback_query
+          ? 'callback_query'
+          : 'other';
+    console.log('[Telegram] webhook update:', updateType, {
+      text: req.body?.message?.text || req.body?.edited_message?.text || null,
+      callback: req.body?.callback_query?.data || null,
+    });
 
-  res.json({ ok: true });
+    const message = req.body?.message || req.body?.edited_message;
+    const messageText = ensureString(message?.text);
+
+    if (message && isStartCommand(messageText)) {
+      // Сначала отвечаем Telegram 200, потом шлём welcome (чтобы не было retry)
+      res.json({ ok: true });
+      handleStartCommand(message).catch((error) => {
+        console.error('Failed to process /start command', error);
+      });
+      return;
+    }
+
+    const callbackQuery = req.body?.callback_query;
+    const callbackData = ensureString(callbackQuery?.data);
+
+    if (!callbackQuery || !callbackData.startsWith('order:')) {
+      res.json({ ok: true });
+      return;
+    }
+
+    const [, orderId, status] = callbackData.split(':');
+    if (!orderId || !['processing', 'ready', 'rejected'].includes(status)) {
+      res.json({ ok: true });
+      return;
+    }
+
+    const state = readState();
+    const managerName = getManagerNameFromTelegramUser(callbackQuery.from);
+    const nextState = applyOrderStatusChange(
+      state,
+      orderId,
+      status,
+      status === 'processing' && managerName ? managerName : undefined,
+    );
+
+    writeState(nextState);
+
+    try {
+      const updatedOrder = nextState.orders.find((order) => order.id === orderId);
+      if (updatedOrder) {
+        await editTelegramMessage(updatedOrder, true);
+      }
+      await answerCallbackQuery(callbackQuery.id, `Заявка ${orderId} -> ${formatStatus(status)}`);
+    } catch (error) {
+      console.error('Failed to process Telegram callback', error);
+    }
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('[Telegram] webhook handler error', error);
+    if (!res.headersSent) {
+      res.json({ ok: true });
+    }
+  }
 });
 
 app.post('/api/telegram/set-webhook', async (_req, res) => {
@@ -1346,10 +1436,27 @@ app.post('/api/telegram/set-webhook', async (_req, res) => {
 
   try {
     await ensureTelegramWebhook();
-    res.json({ ok: true });
+    const info = await getTelegramWebhookInfo();
+    res.json({ ok: true, webhook: info });
   } catch (error) {
     res.status(500).json({
       error: error instanceof Error ? error.message : 'Failed to set webhook',
+    });
+  }
+});
+
+app.get('/api/telegram/webhook-info', async (_req, res) => {
+  if (!botToken) {
+    res.status(400).json({ error: 'BOT_TOKEN is missing' });
+    return;
+  }
+
+  try {
+    const info = await getTelegramWebhookInfo();
+    res.json({ ok: true, webhook: info });
+  } catch (error) {
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Failed to get webhook info',
     });
   }
 });
